@@ -10,6 +10,9 @@ namespace FolderStructureCreator.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
+    // A chart creates one WPF control per folder. Keep this deliberately lower than the
+    // general import limit so folders such as AppData remain useful without slowing the UI.
+    private const int MaxOrgChartNodes = 750;
     // ---- Left pane: live Windows directory browser ----
     public ObservableCollection<FileSystemNode> Drives { get; } = new();
 
@@ -125,7 +128,7 @@ public class MainViewModel : ViewModelBase
         ShowSelectedFolderOrgChartCommand = new RelayCommand(_ => ShowSelectedFolderOrgChart(), _ => SelectedTargetNode is { IsPlaceholder: false });
         CreateStructureCommand = new RelayCommand(_ => CreateStructure(), _ => CanCreateStructure());
         StartRenameCommand = new RelayCommand(param => StartRename(param as FolderNode));
-        ImportFromReferenceCommand = new RelayCommand(_ => ImportFromReference());
+        ImportFromReferenceCommand = new RelayCommand(async _ => await ImportFromReferenceAsync());
         ClearPlanCommand = new RelayCommand(_ => ClearPlan(), _ => RootFolders.Count > 0);
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
@@ -147,20 +150,22 @@ public class MainViewModel : ViewModelBase
     /// hierarchy as the org chart. This is the left-pane equivalent of choosing a
     /// reference folder through the file picker.
     /// </summary>
-    private void ShowSelectedFolderOrgChart()
+    private async void ShowSelectedFolderOrgChart()
     {
         if (SelectedTargetNode is not { IsPlaceholder: false } node) return;
 
+        StatusMessage = $"Reading \"{node.Name}\" for the org chart…";
+
         try
         {
-            var importResult = FileSystemService.BuildFolderNodeTree(node.FullPath);
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(node.FullPath, MaxOrgChartNodes));
             RootFolders.Clear();
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             IsOrgChartView = true;
 
             StatusMessage = importResult.Truncated
-                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). The scan stopped at a safety limit, so some nested folders are not shown."
+                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). Only the first {MaxOrgChartNodes} folders are shown so the chart stays responsive."
                 : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) in the org chart.";
 
             OnPropertyChanged(nameof(TotalFolderCount));
@@ -277,7 +282,7 @@ public class MainViewModel : ViewModelBase
 
     // ---- Import an existing folder's structure ----
 
-    private void ImportFromReference()
+    private async Task ImportFromReferenceAsync()
     {
         var dialog = new OpenFolderDialog
         {
@@ -288,10 +293,11 @@ public class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() != true) return;
 
         var sourcePath = dialog.FolderName;
+        StatusMessage = $"Reading \"{Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar))}\"…";
 
         try
         {
-            var importResult = FileSystemService.BuildFolderNodeTree(sourcePath);
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(sourcePath));
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             IsOrgChartView = true; // an import reads best as the visual org-chart diagram

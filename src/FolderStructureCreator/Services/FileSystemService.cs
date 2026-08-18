@@ -154,14 +154,15 @@ public static class FileSystemService
     /// the whole import stops at MaxImportTotalNodes folders total, and recursion stops at
     /// MaxImportDepth levels deep. If any limit is hit, ImportResult.Truncated is set to true.
     /// </summary>
-    public static ImportResult BuildFolderNodeTree(string sourcePath)
+    public static ImportResult BuildFolderNodeTree(string sourcePath, int maxTotalNodes = MaxImportTotalNodes)
     {
         var result = new ImportResult();
-        result.Root = BuildRecursive(sourcePath, null, depth: 0, result);
+        maxTotalNodes = Math.Clamp(maxTotalNodes, 1, MaxImportTotalNodes);
+        result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result);
         return result;
     }
 
-    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, ImportResult result)
+    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result)
     {
         var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
         if (string.IsNullOrEmpty(name)) name = sourcePath; // e.g. a drive root like "D:\"
@@ -169,7 +170,7 @@ public static class FileSystemService
         var node = new FolderNode(name, parent);
         result.FolderCount++;
 
-        if (depth >= MaxImportDepth || result.FolderCount >= MaxImportTotalNodes)
+        if (depth >= MaxImportDepth || result.FolderCount >= maxTotalNodes)
         {
             result.Truncated = true;
             return node; // stop descending from here, but keep whatever was already found
@@ -180,13 +181,13 @@ public static class FileSystemService
 
         foreach (var subDir in subDirs)
         {
-            if (result.FolderCount >= MaxImportTotalNodes)
+            if (result.FolderCount >= maxTotalNodes)
             {
                 result.Truncated = true;
                 break;
             }
 
-            var child = BuildRecursive(subDir, node, depth + 1, result);
+            var child = BuildRecursive(subDir, node, depth + 1, maxTotalNodes, result);
             node.Children.Add(child);
         }
 
