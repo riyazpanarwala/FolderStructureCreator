@@ -1,0 +1,278 @@
+<Window x:Class="FolderStructureCreator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FolderStructureCreator.ViewModels"
+        xmlns:conv="clr-namespace:FolderStructureCreator.Converters"
+        xmlns:views="clr-namespace:FolderStructureCreator.Views"
+        Title="Folder Structure Creator" Height="720" Width="1180" MinHeight="560" MinWidth="900"
+        WindowStartupLocation="CenterScreen" Icon="AppIcon.ico">
+
+    <Window.Resources>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <conv:PlaceholderBrushConverter x:Key="PlaceholderBrush"/>
+        <conv:BoolToGridLengthConverter x:Key="BoolToGridLength"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===================== Header / target path bar ===================== -->
+        <Border Grid.Row="0" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <TextBlock Text="Folder Structure Creator" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="Build a folder tree once, stamp it out anywhere." Style="{StaticResource SubText}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="TARGET PATH" Style="{StaticResource SubText}" Margin="2,0,0,4"/>
+                    <TextBox Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}"
+                             FontFamily="Consolas" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="⚡ Create Structure" Style="{StaticResource PrimaryButton}"
+                        Margin="16,18,0,0" Command="{Binding CreateStructureCommand}"
+                        ToolTip="Create every folder in the blueprint under the target path"/>
+            </Grid>
+        </Border>
+
+        <!-- ===================== Main two-pane area ===================== -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding IsOrgChartView, Converter={StaticResource BoolToGridLength}, ConverterParameter=1}"/>
+                <ColumnDefinition Width="{Binding IsOrgChartView, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/>
+                <ColumnDefinition Width="1.2*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT: live Windows directory browser (collapses away in Org Chart view for full width) -->
+            <Border Grid.Column="0" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
+                    BorderThickness="1" CornerRadius="8"
+                    Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
+                <DockPanel Margin="12">
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Windows Directory" Style="{StaticResource SectionHeader}"/>
+                            <TextBlock Text="Click a folder to set it as the target" Style="{StaticResource SubText}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="↻ Refresh" Style="{StaticResource ToolButton}"
+                                Command="{Binding RefreshDrivesCommand}"/>
+                    </Grid>
+
+                    <TreeView x:Name="DirectoryTreeView" ItemsSource="{Binding Drives}"
+                              SelectedItemChanged="DirectoryTreeView_SelectedItemChanged">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📁" Margin="0,0,6,0"
+                                               Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12.5"
+                                               Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}"
+                          Background="Transparent" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- RIGHT: structure builder -->
+            <Border Grid.Column="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
+                    BorderThickness="1" CornerRadius="8">
+                <DockPanel Margin="12">
+
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="New Folder Structure" Style="{StaticResource SectionHeader}"/>
+                                <TextBlock Style="{StaticResource SubText}">
+                                    <Run Text="{Binding TotalFolderCount, Mode=OneWay}" FontWeight="SemiBold"/>
+                                    <Run Text=" folder(s) in plan"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- view mode toggle -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                <Button Content="🌳 Tree View" Command="{Binding ShowTreeViewCommand}"
+                                        ToolTip="Editable, indented list view">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ToolButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsOrgChartView}" Value="False">
+                                                    <Setter Property="Background" Value="{StaticResource BrushAccent}"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="🗺 Org Chart" Command="{Binding ShowOrgChartViewCommand}"
+                                        ToolTip="Visual box-and-line diagram, laid out left to right (click a box to select it, double-click to rename)">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ToolButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsOrgChartView}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource BrushAccent}"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- row 1: always-available actions -->
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Content="＋ Root Folder" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}"
+                                    ToolTip="Add a new top-level folder to the plan"/>
+                            <Button Content="📥 Import Existing Folder..." Style="{StaticResource ToolButton}"
+                                    Command="{Binding ImportFromReferenceCommand}"
+                                    ToolTip="Pick any real folder - its subfolder names/nesting are copied into the plan below. Files are never read or copied."/>
+                            <Button Content="🧹 Clear Plan" Style="{StaticResource ToolButton}" Command="{Binding ClearPlanCommand}"
+                                    ToolTip="Remove everything from the plan (nothing on disk is touched)"/>
+                        </WrapPanel>
+
+                        <!-- row 2: only appears once a folder is selected -->
+                        <WrapPanel Margin="0,6,0,0" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}">
+                            <Button Content="＋ Child" Style="{StaticResource ToolButton}" Command="{Binding AddChildFolderCommand}"
+                                    ToolTip="Nest a new folder INSIDE the selected folder (goes one level deeper)"/>
+                            <Button Content="＋ Sibling" Style="{StaticResource ToolButton}" Command="{Binding AddSiblingFolderCommand}"
+                                    ToolTip="Add a new folder NEXT TO the selected folder (same level, same parent)"/>
+                            <Button Content="✎ Rename" Style="{StaticResource ToolButton}" Command="{Binding StartRenameCommand}"
+                                    ToolTip="Rename the selected folder"/>
+                            <Button Content="🗑 Delete" Style="{StaticResource DangerButton}" Command="{Binding DeleteNodeCommand}"
+                                    ToolTip="Remove the selected folder and everything nested under it from the plan"/>
+                        </WrapPanel>
+
+                        <!-- quick add -->
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding QuickAddNames, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Comma-separated names, e.g. src, docs, tests, assets - added as children of the selected folder (or as new roots if nothing's selected)"
+                                     Tag="e.g. src, docs, tests, assets">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding QuickAddCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <Button Grid.Column="1" Content="Add as children" Style="{StaticResource ToolButton}"
+                                    Margin="8,0,0,0" Command="{Binding QuickAddCommand}"
+                                    Visibility="{Binding HasQuickAddText, Converter={StaticResource BoolToVis}}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <Border DockPanel.Dock="Bottom" Background="{StaticResource BrushAccentSoft}" CornerRadius="6"
+                            Padding="10,8" Margin="0,10,0,0">
+                        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{StaticResource BrushAccent}"/>
+                    </Border>
+
+                    <Grid>
+                        <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}"
+                                  SelectedItemChanged="StructureTreeView_SelectedItemChanged"
+                                  Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.ItemTemplate>
+                                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Margin="0,0,6,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="📂"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFile}" Value="True">
+                                                            <Setter Property="Text" Value="📄"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- display text -->
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                   Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}"
+                                                   MouseDown="StructureNodeText_MouseDown">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="FontSize" Value="12.5"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFile}" Value="True">
+                                                            <Setter Property="Foreground" Value="#9CA1AA"/>
+                                                            <Setter Property="FontStyle" Value="Italic"/>
+                                                            <Setter Property="ToolTip" Value="File - shown for reference only, will NOT be created"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- rename box -->
+                                        <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                                                 Padding="2,1" FontSize="12.5"
+                                                 LostFocus="RenameTextBox_LostFocus"
+                                                 KeyDown="RenameTextBox_KeyDown"
+                                                 Loaded="RenameTextBox_Loaded"/>
+                                    </Grid>
+                                </HierarchicalDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+
+                        <views:OrgChartView x:Name="OrgChartHost"
+                                             Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- ===================== Footer ===================== -->
+        <TextBlock Grid.Row="2" Margin="4,10,0,0" Style="{StaticResource SubText}"
+                    Text="Tip: existing folders are left untouched - re-running Create Structure only fills in what's missing."/>
+    </Grid>
+</Window>
