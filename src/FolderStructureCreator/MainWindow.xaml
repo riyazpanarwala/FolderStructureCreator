@@ -55,15 +55,15 @@
         <!-- ===================== Main two-pane area ===================== -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding IsOrgChartView, Converter={StaticResource BoolToGridLength}, ConverterParameter=1}"/>
-                <ColumnDefinition Width="{Binding IsOrgChartView, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/>
+                <ColumnDefinition Width="{Binding ShouldCollapseDirectoryForOrgChart, Converter={StaticResource BoolToGridLength}, ConverterParameter=1}"/>
+                <ColumnDefinition Width="{Binding ShouldCollapseDirectoryForOrgChart, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/>
                 <ColumnDefinition Width="1.2*"/>
             </Grid.ColumnDefinitions>
 
             <!-- LEFT: live Windows directory browser (collapses away in Org Chart view for full width) -->
             <Border Grid.Column="0" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
                     BorderThickness="1" CornerRadius="8"
-                    Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
+                    Visibility="{Binding ShouldCollapseDirectoryForOrgChart, Converter={StaticResource InverseBoolToVis}}">
                 <DockPanel Margin="12">
                     <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -106,7 +106,7 @@
             </Border>
 
             <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                          Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}"
+                          Visibility="{Binding ShouldCollapseDirectoryForOrgChart, Converter={StaticResource InverseBoolToVis}}"
                           Background="Transparent" ResizeBehavior="PreviousAndNext"/>
 
             <!-- RIGHT: structure builder -->

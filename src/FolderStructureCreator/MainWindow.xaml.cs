@@ -19,6 +19,8 @@ public partial class MainWindow : Window
         ViewModel.StructureChanged += RefreshOrgChartIfVisible;
         OrgChartHost.NodeClicked += node => ViewModel.SelectedStructureNode = node;
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
+        Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
+        SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)

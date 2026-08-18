@@ -10,6 +10,8 @@ namespace FolderStructureCreator.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
+    /// <summary>At this width the chart has enough room to coexist with the directory browser.</summary>
+    public const double SideBySideOrgChartWidth = 1500;
     // A chart creates one WPF control per folder. Keep this deliberately lower than the
     // general import limit so folders such as AppData remain useful without slowing the UI.
     private const int MaxOrgChartNodes = 750;
@@ -92,7 +94,23 @@ public class MainViewModel : ViewModelBase
     public bool IsOrgChartView
     {
         get => _isOrgChartView;
-        set => SetField(ref _isOrgChartView, value);
+        set
+        {
+            if (SetField(ref _isOrgChartView, value))
+                OnPropertyChanged(nameof(ShouldCollapseDirectoryForOrgChart));
+        }
+    }
+
+    private bool _isWideWindow;
+    /// <summary>True only while the org chart needs the left browser's space on a smaller window.</summary>
+    public bool ShouldCollapseDirectoryForOrgChart => IsOrgChartView && !_isWideWindow;
+
+    /// <summary>Called by the window as it is resized or moved between displays.</summary>
+    public void UpdateWindowWidth(double width)
+    {
+        var isWideWindow = width >= SideBySideOrgChartWidth;
+        if (SetField(ref _isWideWindow, isWideWindow))
+            OnPropertyChanged(nameof(ShouldCollapseDirectoryForOrgChart));
     }
 
     /// <summary>Raised whenever the plan's shape changes (add/remove/import/clear), so any view
