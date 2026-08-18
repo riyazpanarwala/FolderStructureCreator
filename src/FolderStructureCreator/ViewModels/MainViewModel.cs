@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Security;
 using System.Windows;
 using FolderStructureCreator.Models;
 using FolderStructureCreator.Services;
@@ -23,6 +24,8 @@ public class MainViewModel : ViewModelBase
                 TargetPath = value.FullPath;
                 value.IsExpanded = true; // clicking a folder also opens it, so you can drill down in one click
             }
+
+            ShowSelectedFolderOrgChartCommand?.RaiseCanExecuteChanged();
         }
     }
 
@@ -103,6 +106,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand QuickAddCommand { get; }
     public RelayCommand DeleteNodeCommand { get; }
     public RelayCommand RefreshDrivesCommand { get; }
+    public RelayCommand ShowSelectedFolderOrgChartCommand { get; }
     public RelayCommand CreateStructureCommand { get; }
     public RelayCommand StartRenameCommand { get; }
     public RelayCommand ImportFromReferenceCommand { get; }
@@ -118,6 +122,7 @@ public class MainViewModel : ViewModelBase
         QuickAddCommand = new RelayCommand(_ => QuickAdd(), _ => !string.IsNullOrWhiteSpace(QuickAddNames));
         DeleteNodeCommand = new RelayCommand(_ => DeleteSelected(), _ => SelectedStructureNode != null);
         RefreshDrivesCommand = new RelayCommand(_ => LoadDrives());
+        ShowSelectedFolderOrgChartCommand = new RelayCommand(_ => ShowSelectedFolderOrgChart(), _ => SelectedTargetNode is { IsPlaceholder: false });
         CreateStructureCommand = new RelayCommand(_ => CreateStructure(), _ => CanCreateStructure());
         StartRenameCommand = new RelayCommand(param => StartRename(param as FolderNode));
         ImportFromReferenceCommand = new RelayCommand(_ => ImportFromReference());
@@ -135,6 +140,36 @@ public class MainViewModel : ViewModelBase
         Drives.Clear();
         foreach (var drivePath in FileSystemService.GetDrives())
             Drives.Add(new FileSystemNode(drivePath, drivePath));
+    }
+
+    /// <summary>
+    /// Copies the currently selected real folder into the editable plan and shows its
+    /// hierarchy as the org chart. This is the left-pane equivalent of choosing a
+    /// reference folder through the file picker.
+    /// </summary>
+    private void ShowSelectedFolderOrgChart()
+    {
+        if (SelectedTargetNode is not { IsPlaceholder: false } node) return;
+
+        try
+        {
+            var importResult = FileSystemService.BuildFolderNodeTree(node.FullPath);
+            RootFolders.Clear();
+            RootFolders.Add(importResult.Root);
+            SelectedStructureNode = importResult.Root;
+            IsOrgChartView = true;
+
+            StatusMessage = importResult.Truncated
+                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). The scan stopped at a safety limit, so some nested folders are not shown."
+                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) in the org chart.";
+
+            OnPropertyChanged(nameof(TotalFolderCount));
+            RaiseStructureChanged();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            StatusMessage = $"Could not read the selected folder: {ex.Message}";
+        }
     }
 
     // ---- Structure editing ----

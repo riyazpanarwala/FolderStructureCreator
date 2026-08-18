@@ -72,10 +72,15 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Windows Directory" Style="{StaticResource SectionHeader}"/>
-                            <TextBlock Text="Click a folder to set it as the target" Style="{StaticResource SubText}"/>
+                            <TextBlock Text="Select a folder, then show its hierarchy as an org chart" Style="{StaticResource SubText}"/>
                         </StackPanel>
-                        <Button Grid.Column="1" Content="↻ Refresh" Style="{StaticResource ToolButton}"
-                                Command="{Binding RefreshDrivesCommand}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="🗺 Show Org Chart" Style="{StaticResource ToolButton}"
+                                    Command="{Binding ShowSelectedFolderOrgChartCommand}"
+                                    ToolTip="Copy the selected folder's hierarchy into the plan and show it as an org chart"/>
+                            <Button Content="↻ Refresh" Style="{StaticResource ToolButton}"
+                                    Command="{Binding RefreshDrivesCommand}"/>
+                        </StackPanel>
                     </Grid>
 
                     <TreeView x:Name="DirectoryTreeView" ItemsSource="{Binding Drives}"
