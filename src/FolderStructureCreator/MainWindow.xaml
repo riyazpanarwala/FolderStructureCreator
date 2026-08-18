@@ -67,7 +67,7 @@
 
                     <Grid>
                         <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}" SelectedItemChanged="StructureTreeView_SelectedItemChanged" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
-                            <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
+                            <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/><Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
                             <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}"><Grid><TextBlock Text="{Binding Name}" Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}" MouseDown="StructureNodeText_MouseDown"/><TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" Padding="2,1" LostFocus="RenameTextBox_LostFocus" KeyDown="RenameTextBox_KeyDown" Loaded="RenameTextBox_Loaded"/></Grid></HierarchicalDataTemplate></TreeView.ItemTemplate>
                         </TreeView>
                         <views:OrgChartView x:Name="OrgChartHost" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>

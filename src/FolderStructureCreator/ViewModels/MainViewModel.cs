@@ -59,8 +59,18 @@ public class MainViewModel : ViewModelBase
         get => _selectedStructureNode;
         set
         {
+            if (ReferenceEquals(_selectedStructureNode, value)) return;
+
+            if (_selectedStructureNode is not null)
+                _selectedStructureNode.IsSelected = false;
+
             if (SetField(ref _selectedStructureNode, value))
+            {
+                if (_selectedStructureNode is not null)
+                    _selectedStructureNode.IsSelected = true;
+
                 OnPropertyChanged(nameof(HasSelectedStructureNode));
+            }
         }
     }
 
