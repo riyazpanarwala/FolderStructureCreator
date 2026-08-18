@@ -88,4 +88,8 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
     }
+
+    private void ZoomInOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomIn();
+    private void ZoomOutOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomOut();
+    private void FitOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToView();
 }

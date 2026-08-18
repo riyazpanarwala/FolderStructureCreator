@@ -27,7 +27,7 @@ public partial class OrgChartView : UserControl
     private const double BoxHeight = 34;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns
     private const double RowHeight = 46;   // vertical spacing between sibling rows
-    private const double Padding = 24;
+    private const double ChartPadding = 24;
 
     // Depth-based palette, cycling if the tree goes deeper than the list - loosely matches the
     // reference org-chart style (root=blue, then salmon, gray, amber, repeating).
@@ -43,6 +43,8 @@ public partial class OrgChartView : UserControl
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
+    private const double MinZoom = 0.35;
+    private const double MaxZoom = 2.0;
 
     public OrgChartView()
     {
@@ -55,6 +57,29 @@ public partial class OrgChartView : UserControl
         _lastRoots = roots.ToList();
         _lastSelected = selected;
         RenderInternal();
+    }
+
+    public void ZoomIn() => SetZoom(ChartScale.ScaleX + 0.15);
+
+    public void ZoomOut() => SetZoom(ChartScale.ScaleX - 0.15);
+
+    public void FitToView()
+    {
+        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0 ||
+            ChartScrollViewer.ViewportWidth <= 0 || ChartScrollViewer.ViewportHeight <= 0)
+            return;
+
+        var widthScale = (ChartScrollViewer.ViewportWidth - 20) / RootCanvas.Width;
+        var heightScale = (ChartScrollViewer.ViewportHeight - 20) / RootCanvas.Height;
+        SetZoom(Math.Min(widthScale, heightScale));
+        ChartScrollViewer.ScrollToHome();
+    }
+
+    private void SetZoom(double zoom)
+    {
+        var clamped = Math.Clamp(zoom, MinZoom, MaxZoom);
+        ChartScale.ScaleX = clamped;
+        ChartScale.ScaleY = clamped;
     }
 
     private void RenderInternal()
@@ -100,8 +125,8 @@ public partial class OrgChartView : UserControl
             LayoutNode(root, 0);
 
         int maxDepth = positions.Count > 0 ? positions.Values.Max(p => p.Depth) : 0;
-        RootCanvas.Width = Math.Max(Padding * 2 + (maxDepth + 1) * (BoxWidth + ColumnGap), 100);
-        RootCanvas.Height = Math.Max(Padding * 2 + nextRow * RowHeight, 100);
+        RootCanvas.Width = Math.Max(ChartPadding * 2 + (maxDepth + 1) * (BoxWidth + ColumnGap), 100);
+        RootCanvas.Height = Math.Max(ChartPadding * 2 + nextRow * RowHeight, 100);
 
         // ---- Connectors first, so node boxes visually sit on top of the lines. ----
         void DrawConnectors(FolderNode node)
@@ -227,8 +252,8 @@ public partial class OrgChartView : UserControl
 
     private (double X, double Y) ToPixel(double row, int depth, bool rightEdge)
     {
-        double x = Padding + depth * (BoxWidth + ColumnGap) + (rightEdge ? BoxWidth : 0);
-        double y = Padding + row * RowHeight + RowHeight / 2.0;
+        double x = ChartPadding + depth * (BoxWidth + ColumnGap) + (rightEdge ? BoxWidth : 0);
+        double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
         return (x, y);
     }
 

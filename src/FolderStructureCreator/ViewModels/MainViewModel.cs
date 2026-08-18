@@ -10,7 +10,7 @@ namespace FolderStructureCreator.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    /// <summary>At this width the chart has enough room to coexist with the directory browser.</summary>
+    /// <summary>At this width, the destination browser and chart have comfortable space side by side.</summary>
     public const double SideBySideOrgChartWidth = 1500;
     // A chart creates one WPF control per folder. Keep this deliberately lower than the
     // general import limit so folders such as AppData remain useful without slowing the UI.
@@ -67,6 +67,9 @@ public class MainViewModel : ViewModelBase
     /// <summary>True once a folder in the plan is selected - drives whether the edit toolbar (Child/Sibling/Rename/Delete) is shown at all.</summary>
     public bool HasSelectedStructureNode => SelectedStructureNode != null;
 
+    /// <summary>Drives the builder's empty-state prompt.</summary>
+    public bool HasStructureNodes => RootFolders.Count > 0;
+
     private string _quickAddNames = string.Empty;
     /// <summary>Comma-separated names typed into the quick-add box, e.g. "src, docs, tests".</summary>
     public string QuickAddNames
@@ -97,20 +100,31 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetField(ref _isOrgChartView, value))
-                OnPropertyChanged(nameof(ShouldCollapseDirectoryForOrgChart));
+                OnPropertyChanged(nameof(ShouldShowDestinationSidebarToggle));
         }
     }
 
-    private bool _isWideWindow;
-    /// <summary>True only while the org chart needs the left browser's space on a smaller window.</summary>
-    public bool ShouldCollapseDirectoryForOrgChart => IsOrgChartView && !_isWideWindow;
+    private bool _isDestinationSidebarCollapsed;
+    /// <summary>Lets the chart use the full workspace on smaller screens without clearing the selected target.</summary>
+    public bool IsDestinationSidebarCollapsed
+    {
+        get => _isDestinationSidebarCollapsed;
+        set => SetField(ref _isDestinationSidebarCollapsed, value);
+    }
 
-    /// <summary>Called by the window as it is resized or moved between displays.</summary>
+    private bool _isWideWindow;
+    /// <summary>Only smaller windows need a way to let the chart temporarily use the sidebar's space.</summary>
+    public bool ShouldShowDestinationSidebarToggle => IsOrgChartView && !_isWideWindow;
+
+    /// <summary>Called by the window when it is first shown and whenever it is resized.</summary>
     public void UpdateWindowWidth(double width)
     {
         var isWideWindow = width >= SideBySideOrgChartWidth;
-        if (SetField(ref _isWideWindow, isWideWindow))
-            OnPropertyChanged(nameof(ShouldCollapseDirectoryForOrgChart));
+        if (!SetField(ref _isWideWindow, isWideWindow)) return;
+
+        OnPropertyChanged(nameof(ShouldShowDestinationSidebarToggle));
+        if (isWideWindow)
+            IsDestinationSidebarCollapsed = false;
     }
 
     /// <summary>Raised whenever the plan's shape changes (add/remove/import/clear), so any view
@@ -134,6 +148,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ClearPlanCommand { get; }
     public RelayCommand ShowTreeViewCommand { get; }
     public RelayCommand ShowOrgChartViewCommand { get; }
+    public RelayCommand ToggleDestinationSidebarCommand { get; }
 
     public MainViewModel()
     {
@@ -150,10 +165,17 @@ public class MainViewModel : ViewModelBase
         ClearPlanCommand = new RelayCommand(_ => ClearPlan(), _ => RootFolders.Count > 0);
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
+        ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
 
         LoadDrives();
         AddRootFolder(); // start with one editable root node so the tree isn't empty
-        RootFolders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(TotalFolderCount));
+        RootFolders.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(TotalFolderCount));
+            OnPropertyChanged(nameof(HasStructureNodes));
+            ClearPlanCommand.RaiseCanExecuteChanged();
+            CreateStructureCommand.RaiseCanExecuteChanged();
+        };
     }
 
     private void LoadDrives()
