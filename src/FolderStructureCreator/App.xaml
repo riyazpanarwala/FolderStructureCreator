@@ -179,6 +179,20 @@
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
             </Style>
 
+            <Style TargetType="ContextMenu">
+                <Setter Property="Background" Value="{StaticResource BrushPanel}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="HasDropShadow" Value="True"/>
+            </Style>
+
+            <Style TargetType="MenuItem">
+                <Setter Property="Padding" Value="8,5"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+            </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

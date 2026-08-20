@@ -20,6 +20,9 @@ public partial class MainWindow : Window
         OrgChartHost.NodeClicked += node => ViewModel.SelectedStructureNode = node;
         OrgChartHost.NodeRenamed += (node, newName) => ViewModel.RenameNode(node, newName);
         OrgChartHost.NodeMoved += (source, target) => ViewModel.MoveNode(source, target);
+        OrgChartHost.AddChildRequested += node => ViewModel.AddChildFolderCommand.Execute(null);
+        OrgChartHost.AddSiblingRequested += node => ViewModel.AddSiblingFolderCommand.Execute(null);
+        OrgChartHost.DeleteRequested += node => ViewModel.DeleteNodeCommand.Execute(null);
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
@@ -48,6 +51,15 @@ public partial class MainWindow : Window
     {
         if (e.NewValue is FolderNode node)
             ViewModel.SelectedStructureNode = node;
+    }
+
+    private void TreeViewItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TreeViewItem item)
+        {
+            item.IsSelected = true;
+            item.Focus();
+        }
     }
 
     // Double-click a folder name in the structure builder to rename it in place.

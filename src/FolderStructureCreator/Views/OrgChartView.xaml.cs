@@ -29,6 +29,15 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised when a node box is dragged and dropped onto another node box (moving/re-parenting).</summary>
     public event Action<FolderNode, FolderNode>? NodeMoved;
 
+    /// <summary>Raised when Add Child is clicked in the node context menu.</summary>
+    public event Action<FolderNode>? AddChildRequested;
+
+    /// <summary>Raised when Add Sibling is clicked in the node context menu.</summary>
+    public event Action<FolderNode>? AddSiblingRequested;
+
+    /// <summary>Raised when Delete is clicked in the node context menu.</summary>
+    public event Action<FolderNode>? DeleteRequested;
+
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns
@@ -270,6 +279,52 @@ public partial class OrgChartView : UserControl
                 _isDragging = false;
                 ClearDragTargetHighlight();
             };
+
+            box.PreviewMouseRightButtonDown += (s, e) =>
+            {
+                NodeClicked?.Invoke(node);
+            };
+
+            var menu = new ContextMenu();
+            var addChildItem = new MenuItem { Header = "Add child" };
+            addChildItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                AddChildRequested?.Invoke(node);
+            };
+
+            var addSiblingItem = new MenuItem { Header = "Add sibling" };
+            addSiblingItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                AddSiblingRequested?.Invoke(node);
+            };
+
+            var renameItem = new MenuItem { Header = "Rename" };
+            renameItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                BeginRename(node, box);
+            };
+
+            var deleteItem = new MenuItem
+            {
+                Header = "Delete",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xBE, 0x12, 0x3C))
+            };
+            deleteItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                DeleteRequested?.Invoke(node);
+            };
+
+            menu.Items.Add(addChildItem);
+            menu.Items.Add(addSiblingItem);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(renameItem);
+            menu.Items.Add(deleteItem);
+
+            box.ContextMenu = menu;
 
             RootCanvas.Children.Add(box);
 
