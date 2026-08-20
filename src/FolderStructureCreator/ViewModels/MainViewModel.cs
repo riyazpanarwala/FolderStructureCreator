@@ -102,6 +102,14 @@ public class MainViewModel : ViewModelBase
         set => SetField(ref _statusMessage, value);
     }
 
+    private bool _isLiveSyncMode = false;
+    /// <summary>When true, folder additions, renames, deletions (Recycle Bin), and moves immediately modify physical folders on disk.</summary>
+    public bool IsLiveSyncMode
+    {
+        get => _isLiveSyncMode;
+        set => SetField(ref _isLiveSyncMode, value);
+    }
+
     private bool _isOrgChartView;
     /// <summary>False = editable TreeView, True = the read-visual org-chart diagram (auto-enabled after an import).</summary>
     public bool IsOrgChartView
@@ -213,10 +221,11 @@ public class MainViewModel : ViewModelBase
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             IsOrgChartView = true;
+            IsLiveSyncMode = true; // Auto-enable live computer sync when opening a real directory
 
             StatusMessage = importResult.Truncated
-                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). Only the first {MaxOrgChartNodes} folders are shown so the chart stays responsive."
-                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) in the org chart.";
+                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). Live computer sync enabled."
+                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) in the org chart. Live computer sync enabled.";
 
             OnPropertyChanged(nameof(TotalFolderCount));
             RaiseStructureChanged();
@@ -229,9 +238,55 @@ public class MainViewModel : ViewModelBase
 
     // ---- Structure editing ----
 
+    private static string ComputeNodePathRelativeToTarget(FolderNode node, string targetPath)
+    {
+        if (!string.IsNullOrEmpty(node.RealPath)) return node.RealPath;
+
+        var stack = new Stack<string>();
+        var curr = node;
+        while (curr != null)
+        {
+            if (!string.IsNullOrEmpty(curr.RealPath))
+            {
+                var basePath = curr.RealPath;
+                while (stack.Count > 0)
+                    basePath = Path.Combine(basePath, FileSystemService.SanitizeFolderName(stack.Pop()));
+                return basePath;
+            }
+
+            stack.Push(curr.Name);
+            curr = curr.Parent;
+        }
+
+        var resultPath = targetPath;
+        while (stack.Count > 0)
+            resultPath = Path.Combine(resultPath, FileSystemService.SanitizeFolderName(stack.Pop()));
+
+        return resultPath;
+    }
+
     private void AddRootFolder()
     {
-        var node = new FolderNode("New Folder");
+        var folderName = "New Folder";
+        if (IsLiveSyncMode && TargetPathExists)
+        {
+            var result = FileSystemService.CreateFolderOnDisk(TargetPath, folderName);
+            if (result.Success)
+            {
+                var liveNode = new FolderNode(Path.GetFileName(result.NewPath), realPath: result.NewPath);
+                liveNode.IsEditing = true;
+                RootFolders.Add(liveNode);
+                SelectedStructureNode = liveNode;
+                StatusMessage = $"Created root folder on computer disk: \"{result.NewPath}\"";
+                SelectedTargetNode?.Refresh();
+                OnPropertyChanged(nameof(TotalFolderCount));
+                RaiseStructureChanged();
+                return;
+            }
+        }
+
+        var node = new FolderNode(folderName);
+        node.IsEditing = true;
         RootFolders.Add(node);
         SelectedStructureNode = node;
         OnPropertyChanged(nameof(TotalFolderCount));
@@ -241,10 +296,43 @@ public class MainViewModel : ViewModelBase
     private void AddChild()
     {
         if (SelectedStructureNode is not { IsFile: false }) return;
-        var child = new FolderNode("New Subfolder", SelectedStructureNode);
-        SelectedStructureNode.Children.Add(child);
-        SelectedStructureNode.IsExpanded = true;
-        SelectedStructureNode = child;
+        var parentNode = SelectedStructureNode;
+        var childName = "New Subfolder";
+
+        string? parentPath = parentNode.RealPath;
+        if (string.IsNullOrEmpty(parentPath) && IsLiveSyncMode && TargetPathExists)
+        {
+            parentPath = ComputeNodePathRelativeToTarget(parentNode, TargetPath);
+            parentNode.RealPath = parentPath;
+        }
+
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(parentPath))
+        {
+            var result = FileSystemService.CreateFolderOnDisk(parentPath, childName);
+            if (!result.Success)
+            {
+                StatusMessage = $"Could not create folder on computer disk: {result.Error}";
+                MessageBox.Show($"Could not create folder on computer disk:\n{result.Error}", "Create Folder Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var child = new FolderNode(Path.GetFileName(result.NewPath), parentNode, realPath: result.NewPath);
+            child.IsEditing = true;
+            parentNode.Children.Add(child);
+            parentNode.IsExpanded = true;
+            SelectedStructureNode = child;
+            StatusMessage = $"Created subfolder on computer disk: \"{result.NewPath}\"";
+            SelectedTargetNode?.Refresh();
+        }
+        else
+        {
+            var child = new FolderNode(childName, parentNode);
+            child.IsEditing = true;
+            parentNode.Children.Add(child);
+            parentNode.IsExpanded = true;
+            SelectedStructureNode = child;
+        }
+
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
     }
@@ -253,14 +341,42 @@ public class MainViewModel : ViewModelBase
     {
         if (SelectedStructureNode is null) return;
         var parent = SelectedStructureNode.Parent;
-        var sibling = new FolderNode("New Folder", parent);
+        var folderName = "New Folder";
+        string? targetParentPath = parent?.RealPath ?? (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
 
-        if (parent is null)
-            RootFolders.Add(sibling);
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(targetParentPath))
+        {
+            var result = FileSystemService.CreateFolderOnDisk(targetParentPath, folderName);
+            if (!result.Success)
+            {
+                StatusMessage = $"Could not create folder on computer disk: {result.Error}";
+                MessageBox.Show($"Could not create folder on computer disk:\n{result.Error}", "Create Folder Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var sibling = new FolderNode(Path.GetFileName(result.NewPath), parent, realPath: result.NewPath);
+            sibling.IsEditing = true;
+            if (parent is null)
+                RootFolders.Add(sibling);
+            else
+                parent.Children.Add(sibling);
+
+            SelectedStructureNode = sibling;
+            StatusMessage = $"Created folder on computer disk: \"{result.NewPath}\"";
+            SelectedTargetNode?.Refresh();
+        }
         else
-            parent.Children.Add(sibling);
+        {
+            var sibling = new FolderNode(folderName, parent);
+            sibling.IsEditing = true;
+            if (parent is null)
+                RootFolders.Add(sibling);
+            else
+                parent.Children.Add(sibling);
 
-        SelectedStructureNode = sibling;
+            SelectedStructureNode = sibling;
+        }
+
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
     }
@@ -277,25 +393,48 @@ public class MainViewModel : ViewModelBase
 
         // Files aren't valid parents - fall back to adding as new roots instead of under a file.
         var targetParent = SelectedStructureNode is { IsFile: false } ? SelectedStructureNode : null;
+        string? targetParentPath = targetParent?.RealPath ?? (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
 
         FolderNode? lastAdded = null;
         foreach (var name in names)
         {
-            var node = new FolderNode(name, targetParent);
-            if (targetParent != null)
+            if (IsLiveSyncMode && !string.IsNullOrEmpty(targetParentPath))
             {
-                targetParent.Children.Add(node);
-                targetParent.IsExpanded = true;
+                var result = FileSystemService.CreateFolderOnDisk(targetParentPath, name);
+                if (result.Success)
+                {
+                    var node = new FolderNode(Path.GetFileName(result.NewPath), targetParent, realPath: result.NewPath);
+                    if (targetParent != null)
+                    {
+                        targetParent.Children.Add(node);
+                        targetParent.IsExpanded = true;
+                    }
+                    else
+                    {
+                        RootFolders.Add(node);
+                    }
+                    lastAdded = node;
+                }
             }
             else
             {
-                RootFolders.Add(node);
+                var node = new FolderNode(name, targetParent);
+                if (targetParent != null)
+                {
+                    targetParent.Children.Add(node);
+                    targetParent.IsExpanded = true;
+                }
+                else
+                {
+                    RootFolders.Add(node);
+                }
+                lastAdded = node;
             }
-            lastAdded = node;
         }
 
         QuickAddNames = string.Empty;
         if (lastAdded != null) SelectedStructureNode = lastAdded;
+        SelectedTargetNode?.Refresh();
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
     }
@@ -303,23 +442,145 @@ public class MainViewModel : ViewModelBase
     private void DeleteSelected()
     {
         if (SelectedStructureNode is null) return;
-
-        var confirm = MessageBox.Show(
-            $"Delete \"{SelectedStructureNode.Name}\" and everything nested under it from the blueprint?\n\n(This only affects the plan on screen - nothing on disk is touched.)",
-            "Confirm delete",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (confirm != MessageBoxResult.Yes) return;
-
         var node = SelectedStructureNode;
-        if (node.Parent is null)
-            RootFolders.Remove(node);
-        else
-            node.Parent.Children.Remove(node);
 
-        SelectedStructureNode = null;
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(node.RealPath))
+        {
+            var confirm = MessageBox.Show(
+                $"Send \"{node.Name}\" and all of its contents to the Windows Recycle Bin?\n\nPath: {node.RealPath}",
+                "Confirm Delete (Recycle Bin)",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (confirm != MessageBoxResult.Yes) return;
+
+            var result = FileSystemService.DeleteFolderToRecycleBin(node.RealPath);
+            if (!result.Success)
+            {
+                StatusMessage = $"Could not delete folder from computer disk: {result.Error}";
+                MessageBox.Show($"Could not delete folder from computer disk:\n{result.Error}", "Delete Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (node.Parent is null)
+                RootFolders.Remove(node);
+            else
+                node.Parent.Children.Remove(node);
+
+            SelectedStructureNode = null;
+            StatusMessage = $"Sent \"{node.Name}\" to the Windows Recycle Bin.";
+            SelectedTargetNode?.Refresh();
+        }
+        else
+        {
+            var confirm = MessageBox.Show(
+                $"Delete \"{node.Name}\" and everything nested under it from the blueprint?\n\n(This only affects the plan on screen - nothing on disk is touched.)",
+                "Confirm delete",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (confirm != MessageBoxResult.Yes) return;
+
+            if (node.Parent is null)
+                RootFolders.Remove(node);
+            else
+                node.Parent.Children.Remove(node);
+
+            SelectedStructureNode = null;
+        }
+
         OnPropertyChanged(nameof(TotalFolderCount));
+        RaiseStructureChanged();
+    }
+
+    /// <summary>Renames a node, performing physical disk rename when Live Computer Sync is enabled.</summary>
+    public void RenameNode(FolderNode node, string newName)
+    {
+        if (node == null) return;
+        var trimmed = string.IsNullOrWhiteSpace(newName) ? "New Folder" : newName.Trim();
+
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(node.RealPath))
+        {
+            if (string.Equals(node.Name, trimmed, StringComparison.OrdinalIgnoreCase)) return;
+
+            var result = FileSystemService.RenameFolderOnDisk(node.RealPath, trimmed);
+            if (result.Success)
+            {
+                node.Name = Path.GetFileName(result.NewPath);
+                node.UpdateRealPaths(result.NewPath);
+                StatusMessage = $"Renamed folder on computer disk to: \"{result.NewPath}\"";
+                SelectedTargetNode?.Refresh();
+            }
+            else
+            {
+                StatusMessage = $"Could not rename folder on computer disk: {result.Error}";
+                MessageBox.Show($"Could not rename folder on computer disk:\n{result.Error}", "Rename Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+        }
+        else
+        {
+            node.Name = trimmed;
+        }
+
+        RaiseStructureChanged();
+    }
+
+    /// <summary>Moves sourceNode to become a child of targetParent, performing physical disk move when Live Computer Sync is enabled.</summary>
+    public void MoveNode(FolderNode sourceNode, FolderNode targetParent)
+    {
+        if (sourceNode == null || targetParent == null) return;
+        if (ReferenceEquals(sourceNode, targetParent)) return;
+        if (ReferenceEquals(sourceNode.Parent, targetParent)) return;
+
+        // Prevent circular moving (moving a parent into its own descendant)
+        var current = targetParent;
+        while (current != null)
+        {
+            if (ReferenceEquals(current, sourceNode))
+            {
+                MessageBox.Show("Cannot move a folder into one of its own subfolders.", "Invalid Move", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            current = current.Parent;
+        }
+
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(sourceNode.RealPath) && !string.IsNullOrEmpty(targetParent.RealPath))
+        {
+            var result = FileSystemService.MoveFolderOnDisk(sourceNode.RealPath, targetParent.RealPath);
+            if (!result.Success)
+            {
+                StatusMessage = $"Could not move folder on computer disk: {result.Error}";
+                MessageBox.Show($"Could not move folder on computer disk:\n{result.Error}", "Move Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (sourceNode.Parent is null)
+                RootFolders.Remove(sourceNode);
+            else
+                sourceNode.Parent.Children.Remove(sourceNode);
+
+            sourceNode.Parent = targetParent;
+            targetParent.Children.Add(sourceNode);
+            targetParent.IsExpanded = true;
+            sourceNode.UpdateRealPaths(result.NewPath);
+
+            StatusMessage = $"Moved folder on computer disk to \"{result.NewPath}\"";
+            SelectedTargetNode?.Refresh();
+        }
+        else
+        {
+            if (sourceNode.Parent is null)
+                RootFolders.Remove(sourceNode);
+            else
+                sourceNode.Parent.Children.Remove(sourceNode);
+
+            sourceNode.Parent = targetParent;
+            targetParent.Children.Add(sourceNode);
+            targetParent.IsExpanded = true;
+        }
+
+        SelectedStructureNode = sourceNode;
         RaiseStructureChanged();
     }
 

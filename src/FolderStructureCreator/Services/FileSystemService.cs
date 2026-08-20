@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security;
 using FolderStructureCreator.Models;
 
@@ -6,6 +7,29 @@ namespace FolderStructureCreator.Services;
 
 public static class FileSystemService
 {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct SHFILEOPSTRUCT
+    {
+        public IntPtr hwnd;
+        public uint wFunc;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public string pFrom;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public string pTo;
+        public ushort fFlags;
+        public bool fAnyOperationsAborted;
+        public IntPtr hNameMappings;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public string lpszProgressTitle;
+    }
+
+    private const uint FO_DELETE = 0x0003;
+    private const ushort FOF_ALLOWUNDO = 0x0040;
+    private const ushort FOF_NOCONFIRMATION = 0x0010;
+    private const ushort FOF_SILENT = 0x0004;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+    private static extern int SHFileOperation(ref SHFILEOPSTRUCT FileOp);
     /// <summary>Enumerates real, mounted drives for the root of the left-hand browser.</summary>
     public static IEnumerable<string> GetDrives()
     {
@@ -167,7 +191,7 @@ public static class FileSystemService
         var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
         if (string.IsNullOrEmpty(name)) name = sourcePath; // e.g. a drive root like "D:\"
 
-        var node = new FolderNode(name, parent);
+        var node = new FolderNode(name, parent, realPath: sourcePath);
         result.FolderCount++;
 
         if (depth >= MaxImportDepth || result.FolderCount >= maxTotalNodes)
@@ -192,6 +216,133 @@ public static class FileSystemService
         }
 
         return node;
+    }
+
+    /// <summary>Renames a real folder on disk using Directory.Move, with graceful fallback to creation if missing.</summary>
+    public static (bool Success, string NewPath, string Error) RenameFolderOnDisk(string oldPath, string newName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(oldPath))
+                return (false, oldPath, "Original folder path is empty.");
+
+            var parent = Path.GetDirectoryName(oldPath.TrimEnd(Path.DirectorySeparatorChar));
+            if (string.IsNullOrEmpty(parent))
+                return (false, oldPath, "Cannot rename a drive root directory.");
+
+            var safeName = SanitizeFolderName(newName);
+            var newPath = Path.Combine(parent, safeName);
+
+            if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+                return (true, oldPath, string.Empty);
+
+            if (Directory.Exists(newPath))
+                return (false, oldPath, $"A folder named \"{safeName}\" already exists in the destination.");
+
+            if (Directory.Exists(oldPath))
+            {
+                Directory.Move(oldPath, newPath);
+                return (true, newPath, string.Empty);
+            }
+            else if (Directory.Exists(parent))
+            {
+                Directory.CreateDirectory(newPath);
+                return (true, newPath, string.Empty);
+            }
+            else
+            {
+                return (true, newPath, string.Empty);
+            }
+        }
+        catch (Exception ex)
+        {
+            return (false, oldPath, ex.Message);
+        }
+    }
+
+    /// <summary>Creates a new folder on disk under parentPath.</summary>
+    public static (bool Success, string NewPath, string Error) CreateFolderOnDisk(string parentPath, string folderName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(parentPath) || !Directory.Exists(parentPath))
+                return (false, string.Empty, "Parent target path does not exist on disk.");
+
+            var safeName = SanitizeFolderName(folderName);
+            var newPath = Path.Combine(parentPath, safeName);
+
+            if (!Directory.Exists(newPath))
+                Directory.CreateDirectory(newPath);
+
+            return (true, newPath, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (false, string.Empty, ex.Message);
+        }
+    }
+
+    /// <summary>Sends a folder to the Windows Recycle Bin using shell SHFileOperation.</summary>
+    public static (bool Success, string Error) DeleteFolderToRecycleBin(string path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                return (false, "Folder path does not exist on disk.");
+
+            var fileop = new SHFILEOPSTRUCT
+            {
+                wFunc = FO_DELETE,
+                pFrom = path + "\0\0",
+                fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT
+            };
+
+            int res = SHFileOperation(ref fileop);
+            if (res == 0)
+                return (true, string.Empty);
+
+            // Fallback to Directory.Delete if shell operation fails
+            Directory.Delete(path, true);
+            return (true, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>Moves a folder on disk to a new parent folder directory.</summary>
+    public static (bool Success, string NewPath, string Error) MoveFolderOnDisk(string sourcePath, string destParentPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
+                return (false, sourcePath, "Source folder does not exist on disk.");
+
+            if (string.IsNullOrWhiteSpace(destParentPath) || !Directory.Exists(destParentPath))
+                return (false, sourcePath, "Destination parent folder does not exist on disk.");
+
+            var folderName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
+            var targetPath = Path.Combine(destParentPath, folderName);
+
+            if (string.Equals(sourcePath, targetPath, StringComparison.OrdinalIgnoreCase))
+                return (true, sourcePath, string.Empty);
+
+            if (Directory.Exists(targetPath))
+                return (false, sourcePath, $"A folder named \"{folderName}\" already exists at the destination.");
+
+            var normSource = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var normTarget = Path.GetFullPath(targetPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (normTarget.StartsWith(normSource, StringComparison.OrdinalIgnoreCase))
+                return (false, sourcePath, "Cannot move a folder into one of its own subfolders.");
+
+            Directory.Move(sourcePath, targetPath);
+            return (true, targetPath, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (false, sourcePath, ex.Message);
+        }
     }
 
     /// <summary>

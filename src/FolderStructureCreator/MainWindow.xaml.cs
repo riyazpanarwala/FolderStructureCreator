@@ -18,6 +18,8 @@ public partial class MainWindow : Window
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.StructureChanged += RefreshOrgChartIfVisible;
         OrgChartHost.NodeClicked += node => ViewModel.SelectedStructureNode = node;
+        OrgChartHost.NodeRenamed += (node, newName) => ViewModel.RenameNode(node, newName);
+        OrgChartHost.NodeMoved += (source, target) => ViewModel.MoveNode(source, target);
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
@@ -69,17 +71,21 @@ public partial class MainWindow : Window
 
     private void RenameTextBox_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (sender is TextBox { DataContext: FolderNode node })
+        if (sender is TextBox { DataContext: FolderNode node } box)
+        {
             node.IsEditing = false;
+            ViewModel.RenameNode(node, box.Text);
+        }
     }
 
     private void RenameTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (sender is not TextBox { DataContext: FolderNode node }) return;
+        if (sender is not TextBox { DataContext: FolderNode node } box) return;
 
         if (e.Key == Key.Enter)
         {
             node.IsEditing = false;
+            ViewModel.RenameNode(node, box.Text);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)

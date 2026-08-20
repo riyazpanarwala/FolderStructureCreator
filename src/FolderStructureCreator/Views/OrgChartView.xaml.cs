@@ -23,6 +23,12 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised after an inline rename (via double-click) is committed to the model.</summary>
     public event Action? StructureEdited;
 
+    /// <summary>Raised when an inline rename is committed, passing the node and requested new name.</summary>
+    public event Action<FolderNode, string>? NodeRenamed;
+
+    /// <summary>Raised when a node box is dragged and dropped onto another node box (moving/re-parenting).</summary>
+    public event Action<FolderNode, FolderNode>? NodeMoved;
+
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns
@@ -40,9 +46,16 @@ public partial class OrgChartView : UserControl
     };
 
     private static readonly SolidColorBrush SelectedBrush = new(Color.FromRgb(0x0F, 0x76, 0x6E));
+    private static readonly SolidColorBrush DragHoverBrush = new(Color.FromRgb(0x02, 0x84, 0xC7)); // Sky blue highlight for drag target
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
+    private Dictionary<Border, FolderNode> _boxMap = new();
+    private FolderNode? _draggedNode;
+    private Point _dragStartPoint;
+    private bool _isDragging;
+    private FolderNode? _dragTargetNode;
+    private Border? _dragTargetBox;
     private const double MinZoom = 0.35;
     private const double MaxZoom = 2.0;
 
@@ -85,6 +98,7 @@ public partial class OrgChartView : UserControl
     private void RenderInternal()
     {
         RootCanvas.Children.Clear();
+        _boxMap.Clear();
 
         if (_lastRoots.Count == 0)
         {
@@ -196,17 +210,122 @@ public partial class OrgChartView : UserControl
             Canvas.SetLeft(box, x);
             Canvas.SetTop(box, y - BoxHeight / 2);
 
-            box.MouseLeftButtonDown += (_, e) =>
+            _boxMap[box] = node;
+
+            box.PreviewMouseLeftButtonDown += (s, e) =>
             {
                 if (e.ClickCount == 2)
+                {
+                    _draggedNode = null;
+                    _isDragging = false;
                     BeginRename(node, box);
-                else
-                    NodeClicked?.Invoke(node);
-                e.Handled = true;
+                    e.Handled = true;
+                    return;
+                }
+
+                _draggedNode = node;
+                _dragStartPoint = e.GetPosition(RootCanvas);
+                _isDragging = false;
+                NodeClicked?.Invoke(node);
+            };
+
+            box.PreviewMouseMove += (s, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || _draggedNode == null) return;
+
+                var posCanvas = e.GetPosition(RootCanvas);
+                var diff = _dragStartPoint - posCanvas;
+
+                if (!_isDragging && (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance || Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance))
+                {
+                    _isDragging = true;
+                    box.CaptureMouse();
+                }
+
+                if (_isDragging)
+                {
+                    UpdateDragHoverTarget(posCanvas);
+                }
+            };
+
+            box.PreviewMouseLeftButtonUp += (s, e) =>
+            {
+                if (box.IsMouseCaptured)
+                    box.ReleaseMouseCapture();
+
+                if (_isDragging && _draggedNode != null && _dragTargetNode != null)
+                {
+                    var source = _draggedNode;
+                    var target = _dragTargetNode;
+                    _draggedNode = null;
+                    _isDragging = false;
+                    ClearDragTargetHighlight();
+
+                    NodeMoved?.Invoke(source, target);
+                    e.Handled = true;
+                    return;
+                }
+
+                _draggedNode = null;
+                _isDragging = false;
+                ClearDragTargetHighlight();
             };
 
             RootCanvas.Children.Add(box);
+
+            if (node.IsEditing)
+            {
+                BeginRename(node, box);
+            }
         }
+    }
+
+    private void UpdateDragHoverTarget(Point canvasPos)
+    {
+        FolderNode? hitNode = null;
+        Border? hitBox = null;
+
+        foreach (var (box, node) in _boxMap)
+        {
+            if (ReferenceEquals(node, _draggedNode)) continue;
+
+            double left = Canvas.GetLeft(box);
+            double top = Canvas.GetTop(box);
+
+            if (canvasPos.X >= left && canvasPos.X <= left + BoxWidth &&
+                canvasPos.Y >= top && canvasPos.Y <= top + BoxHeight)
+            {
+                hitNode = node;
+                hitBox = box;
+                break;
+            }
+        }
+
+        if (ReferenceEquals(_dragTargetBox, hitBox)) return;
+
+        ClearDragTargetHighlight();
+
+        if (hitBox != null && hitNode != null)
+        {
+            _dragTargetBox = hitBox;
+            _dragTargetNode = hitNode;
+            hitBox.BorderBrush = DragHoverBrush;
+            hitBox.BorderThickness = new Thickness(3);
+        }
+    }
+
+    private void ClearDragTargetHighlight()
+    {
+        if (_dragTargetBox != null && _dragTargetNode != null)
+        {
+            bool isSelected = ReferenceEquals(_dragTargetNode, _lastSelected);
+            var (_, border) = GetPalette(0);
+            _dragTargetBox.BorderBrush = isSelected ? SelectedBrush : new SolidColorBrush(border);
+            _dragTargetBox.BorderThickness = new Thickness(isSelected ? 2.5 : 1);
+        }
+
+        _dragTargetBox = null;
+        _dragTargetNode = null;
     }
 
     /// <summary>Swaps a node's box for an inline TextBox so its name can be edited in place.</summary>
@@ -237,7 +356,13 @@ public partial class OrgChartView : UserControl
 
         void Commit()
         {
-            node.Name = editBox.Text; // FolderNode.Name setter already falls back to "New Folder" if blank
+            node.IsEditing = false;
+            var newName = editBox.Text;
+            if (NodeRenamed != null)
+                NodeRenamed.Invoke(node, newName);
+            else
+                node.Name = newName;
+
             RenderInternal();
             StructureEdited?.Invoke();
         }
@@ -246,7 +371,7 @@ public partial class OrgChartView : UserControl
         editBox.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter) { Commit(); e.Handled = true; }
-            else if (e.Key == Key.Escape) { RenderInternal(); e.Handled = true; }
+            else if (e.Key == Key.Escape) { node.IsEditing = false; RenderInternal(); e.Handled = true; }
         };
     }
 

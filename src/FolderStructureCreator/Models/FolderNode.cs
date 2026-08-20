@@ -16,12 +16,36 @@ public class FolderNode : INotifyPropertyChanged
     private bool _isSelected;
     private bool _isEditing;
 
-    public FolderNode(string name, FolderNode? parent = null, bool isFile = false)
+    private string? _realPath;
+
+    public FolderNode(string name, FolderNode? parent = null, bool isFile = false, string? realPath = null)
     {
         _name = string.IsNullOrWhiteSpace(name) ? "New Folder" : name;
         Parent = parent;
         IsFile = isFile;
+        _realPath = realPath;
         Children = new ObservableCollection<FolderNode>();
+    }
+
+    /// <summary>
+    /// Holds the physical disk path when this node is bound to a real folder on the computer.
+    /// </summary>
+    public string? RealPath
+    {
+        get => _realPath;
+        set => SetField(ref _realPath, value);
+    }
+
+    /// <summary>Recursively updates RealPath for this node and all of its descendants.</summary>
+    public void UpdateRealPaths(string newPath)
+    {
+        RealPath = newPath;
+        foreach (var child in Children)
+        {
+            var childName = System.IO.Path.GetFileName(child.RealPath?.TrimEnd(System.IO.Path.DirectorySeparatorChar) ?? child.Name);
+            var childNewPath = System.IO.Path.Combine(newPath, childName);
+            child.UpdateRealPaths(childNewPath);
+        }
     }
 
     /// <summary>
