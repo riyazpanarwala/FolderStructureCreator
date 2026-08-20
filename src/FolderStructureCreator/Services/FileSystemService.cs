@@ -288,7 +288,7 @@ public static class FileSystemService
         try
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
-                return (false, "Folder path does not exist on disk.");
+                return (true, string.Empty);
 
             var fileop = new SHFILEOPSTRUCT
             {
@@ -302,7 +302,9 @@ public static class FileSystemService
                 return (true, string.Empty);
 
             // Fallback to Directory.Delete if shell operation fails
-            Directory.Delete(path, true);
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+
             return (true, string.Empty);
         }
         catch (Exception ex)

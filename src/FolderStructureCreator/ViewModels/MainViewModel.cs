@@ -444,7 +444,9 @@ public class MainViewModel : ViewModelBase
         if (SelectedStructureNode is null) return;
         var node = SelectedStructureNode;
 
-        if (IsLiveSyncMode && !string.IsNullOrEmpty(node.RealPath))
+        bool existsOnDisk = !string.IsNullOrEmpty(node.RealPath) && Directory.Exists(node.RealPath);
+
+        if (IsLiveSyncMode && existsOnDisk && !string.IsNullOrEmpty(node.RealPath))
         {
             var confirm = MessageBox.Show(
                 $"Send \"{node.Name}\" and all of its contents to the Windows Recycle Bin?\n\nPath: {node.RealPath}",
@@ -462,33 +464,26 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
-            if (node.Parent is null)
-                RootFolders.Remove(node);
-            else
-                node.Parent.Children.Remove(node);
-
-            SelectedStructureNode = null;
             StatusMessage = $"Sent \"{node.Name}\" to the Windows Recycle Bin.";
-            SelectedTargetNode?.Refresh();
         }
-        else
+        else if (!existsOnDisk)
         {
             var confirm = MessageBox.Show(
-                $"Delete \"{node.Name}\" and everything nested under it from the blueprint?\n\n(This only affects the plan on screen - nothing on disk is touched.)",
+                $"Delete \"{node.Name}\" and everything nested under it from the blueprint?",
                 "Confirm delete",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
             if (confirm != MessageBoxResult.Yes) return;
-
-            if (node.Parent is null)
-                RootFolders.Remove(node);
-            else
-                node.Parent.Children.Remove(node);
-
-            SelectedStructureNode = null;
         }
 
+        if (node.Parent is null)
+            RootFolders.Remove(node);
+        else
+            node.Parent.Children.Remove(node);
+
+        SelectedStructureNode = null;
+        SelectedTargetNode?.Refresh();
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
     }
