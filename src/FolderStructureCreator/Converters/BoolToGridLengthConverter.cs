@@ -21,9 +21,19 @@ public class BoolToGridLengthConverter : IValueConverter
         if (string.Equals(spec, "Auto", StringComparison.OrdinalIgnoreCase))
             return GridLength.Auto;
 
-        var starText = spec.EndsWith("*") ? spec[..^1] : spec;
-        var factor = string.IsNullOrEmpty(starText) ? 1.0 : double.Parse(starText, CultureInfo.InvariantCulture);
-        return new GridLength(factor, GridUnitType.Star);
+        if (spec.EndsWith("*", StringComparison.Ordinal))
+        {
+            var starText = spec[..^1];
+            var factor = string.IsNullOrEmpty(starText) ? 1.0 : double.Parse(starText, CultureInfo.InvariantCulture);
+            return new GridLength(factor, GridUnitType.Star);
+        }
+
+        if (double.TryParse(spec, NumberStyles.Any, CultureInfo.InvariantCulture, out var pixels))
+        {
+            return new GridLength(pixels, GridUnitType.Pixel);
+        }
+
+        return new GridLength(1, GridUnitType.Star);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

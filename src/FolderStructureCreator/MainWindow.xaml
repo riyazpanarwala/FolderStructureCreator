@@ -49,24 +49,21 @@
         </Grid>
 
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=0.9}" MinWidth="0"/><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/><ColumnDefinition Width="1.35*" MinWidth="390"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=430}" MinWidth="0"/><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/><ColumnDefinition Width="*" MinWidth="390"/></Grid.ColumnDefinitions>
             <!-- The destination browser stays visible in both plan views. -->
             <Border Grid.Column="0" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Visibility="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource InverseBoolToVis}}">
                 <DockPanel Margin="12">
-                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="💻 Real Computer Drives" Style="{StaticResource SectionHeader}"/>
-                            </StackPanel>
-                            <TextBlock Text="Select target destination folder on your disk" Style="{StaticResource SubText}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                            <Button Content="📌 Pin" Style="{StaticResource ToolButton}" Command="{Binding PinSelectedFolderCommand}" ToolTip="Pin selected folder for easy chart view access"/>
-                            <Button Content="Use as plan" Style="{StaticResource ToolButton}" Command="{Binding ShowSelectedFolderOrgChartCommand}" ToolTip="Copy the selected folder's hierarchy into the plan"/>
-                            <Button Content="Refresh" Style="{StaticResource ToolButton}" Command="{Binding RefreshDrivesCommand}" ToolTip="Refresh available drives"/>
-                        </StackPanel>
-                    </Grid>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                            <TextBlock Text="💻 Real Computer Drives" Style="{StaticResource SectionHeader}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                            <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Content="📌 Pin" Style="{StaticResource ToolButton}" Command="{Binding PinSelectedFolderCommand}" ToolTip="Pin selected folder for easy chart view access" Margin="0,0,4,4"/>
+                                <Button Content="Use as plan" Style="{StaticResource ToolButton}" Command="{Binding ShowSelectedFolderOrgChartCommand}" ToolTip="Copy the selected folder's hierarchy into the plan" Margin="0,0,4,4"/>
+                                <Button Content="Refresh" Style="{StaticResource ToolButton}" Command="{Binding RefreshDrivesCommand}" ToolTip="Refresh available drives" Margin="0,0,0,4"/>
+                            </WrapPanel>
+                        </DockPanel>
+                        <TextBlock Text="Select target destination folder on your disk" Style="{StaticResource SubText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
 
                     <!-- Pinned Folders Section -->
                     <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}">
