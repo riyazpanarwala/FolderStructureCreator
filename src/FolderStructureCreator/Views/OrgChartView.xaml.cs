@@ -41,6 +41,12 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised when Delete is clicked in the node context menu.</summary>
     public event Action<FolderNode>? DeleteRequested;
 
+    /// <summary>Raised when the zoom level changes.</summary>
+    public event Action<double>? ZoomLevelChanged;
+
+    /// <summary>Current zoom level scale.</summary>
+    public double ZoomLevel => ChartScale.ScaleX;
+
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns
@@ -70,12 +76,75 @@ public partial class OrgChartView : UserControl
     private bool _isDragging;
     private FolderNode? _dragTargetNode;
     private Border? _dragTargetBox;
-    private const double MinZoom = 0.35;
-    private const double MaxZoom = 2.0;
+
+    // Expanded zoom limits (10% to 400%)
+    private const double MinZoom = 0.1;
+    private const double MaxZoom = 4.0;
+
+    // Canvas panning fields
+    private bool _isPanning;
+    private Point _panStartMousePos;
+    private double _panStartHOffset;
+    private double _panStartVOffset;
 
     public OrgChartView()
     {
         InitializeComponent();
+
+        ChartScrollViewer.PreviewMouseWheel += ChartScrollViewer_PreviewMouseWheel;
+        ChartScrollViewer.PreviewMouseDown += ChartScrollViewer_PreviewMouseDown;
+        ChartScrollViewer.PreviewMouseMove += ChartScrollViewer_PreviewMouseMove;
+        ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
+    }
+
+    private void ChartScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            double factor = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
+            Point mousePos = e.GetPosition(ChartScrollViewer);
+            ZoomAtPoint(ChartScale.ScaleX * factor, mousePos);
+            e.Handled = true;
+        }
+    }
+
+    private void ChartScrollViewer_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle ||
+           (e.ChangedButton == MouseButton.Right && (e.OriginalSource is Canvas or ScrollViewer)))
+        {
+            _isPanning = true;
+            _panStartMousePos = e.GetPosition(ChartScrollViewer);
+            _panStartHOffset = ChartScrollViewer.HorizontalOffset;
+            _panStartVOffset = ChartScrollViewer.VerticalOffset;
+            ChartScrollViewer.CaptureMouse();
+            ChartScrollViewer.Cursor = Cursors.SizeAll;
+            e.Handled = true;
+        }
+    }
+
+    private void ChartScrollViewer_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isPanning)
+        {
+            Point currentPos = e.GetPosition(ChartScrollViewer);
+            Vector delta = currentPos - _panStartMousePos;
+
+            ChartScrollViewer.ScrollToHorizontalOffset(_panStartHOffset - delta.X);
+            ChartScrollViewer.ScrollToVerticalOffset(_panStartVOffset - delta.Y);
+            e.Handled = true;
+        }
+    }
+
+    private void ChartScrollViewer_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isPanning && (e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Right))
+        {
+            _isPanning = false;
+            ChartScrollViewer.ReleaseMouseCapture();
+            ChartScrollViewer.Cursor = Cursors.Arrow;
+            e.Handled = true;
+        }
     }
 
     /// <summary>Redraws the whole chart for the given roots, highlighting the selected node if any.</summary>
@@ -84,7 +153,6 @@ public partial class OrgChartView : UserControl
         _lastRoots = roots.ToList();
         _lastSelected = selected;
         RenderInternal();
-        BringSelectedIntoView();
     }
 
     /// <summary>Scrolls/centers the ScrollViewer viewport on the selected node box if present.</summary>
@@ -126,20 +194,84 @@ public partial class OrgChartView : UserControl
         }
     }
 
-    public void ZoomIn() => SetZoom(ChartScale.ScaleX + 0.15);
+    public void ZoomIn() => SetZoom(ChartScale.ScaleX * 1.15);
 
-    public void ZoomOut() => SetZoom(ChartScale.ScaleX - 0.15);
+    public void ZoomOut() => SetZoom(ChartScale.ScaleX / 1.15);
+
+    public void ResetZoom() => SetZoom(1.0);
+
+    public void ZoomAtPoint(double newZoom, Point viewportPoint)
+    {
+        var oldZoom = ChartScale.ScaleX;
+        var clampedZoom = Math.Clamp(newZoom, MinZoom, MaxZoom);
+        if (Math.Abs(clampedZoom - oldZoom) < 0.001) return;
+
+        double mouseOffsetX = viewportPoint.X + ChartScrollViewer.HorizontalOffset;
+        double mouseOffsetY = viewportPoint.Y + ChartScrollViewer.VerticalOffset;
+
+        double canvasX = mouseOffsetX / oldZoom;
+        double canvasY = mouseOffsetY / oldZoom;
+
+        ChartScale.ScaleX = clampedZoom;
+        ChartScale.ScaleY = clampedZoom;
+        ZoomLevelChanged?.Invoke(clampedZoom);
+
+        double newMouseOffsetX = canvasX * clampedZoom;
+        double newMouseOffsetY = canvasY * clampedZoom;
+
+        ChartScrollViewer.ScrollToHorizontalOffset(newMouseOffsetX - viewportPoint.X);
+        ChartScrollViewer.ScrollToVerticalOffset(newMouseOffsetY - viewportPoint.Y);
+    }
 
     public void FitToView()
     {
-        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0 ||
-            ChartScrollViewer.ViewportWidth <= 0 || ChartScrollViewer.ViewportHeight <= 0)
-            return;
+        void PerformFit()
+        {
+            if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0 ||
+                ChartScrollViewer.ViewportWidth <= 0 || ChartScrollViewer.ViewportHeight <= 0)
+                return;
 
-        var widthScale = (ChartScrollViewer.ViewportWidth - 20) / RootCanvas.Width;
-        var heightScale = (ChartScrollViewer.ViewportHeight - 20) / RootCanvas.Height;
-        SetZoom(Math.Min(widthScale, heightScale));
-        ChartScrollViewer.ScrollToHome();
+            double padding = 32;
+            var widthScale = (ChartScrollViewer.ViewportWidth - padding) / RootCanvas.Width;
+            var heightScale = (ChartScrollViewer.ViewportHeight - padding) / RootCanvas.Height;
+            double fitZoom = Math.Min(widthScale, heightScale);
+
+            SetZoom(fitZoom);
+
+            double scaledWidth = RootCanvas.Width * ChartScale.ScaleX;
+            double scaledHeight = RootCanvas.Height * ChartScale.ScaleY;
+
+            double targetX = Math.Max(0, (scaledWidth - ChartScrollViewer.ViewportWidth) / 2.0);
+            double targetY = Math.Max(0, (scaledHeight - ChartScrollViewer.ViewportHeight) / 2.0);
+
+            ChartScrollViewer.ScrollToHorizontalOffset(targetX);
+            ChartScrollViewer.ScrollToVerticalOffset(targetY);
+        }
+
+        if (ChartScrollViewer.ViewportWidth > 0 && ChartScrollViewer.ViewportHeight > 0)
+        {
+            PerformFit();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(PerformFit, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
+    public void FitSelectedToView()
+    {
+        if (_lastSelected == null)
+        {
+            FitToView();
+            return;
+        }
+
+        if (ChartScale.ScaleX < 0.8)
+        {
+            SetZoom(1.0);
+        }
+
+        BringSelectedIntoView();
     }
 
     private void SetZoom(double zoom)
@@ -147,6 +279,7 @@ public partial class OrgChartView : UserControl
         var clamped = Math.Clamp(zoom, MinZoom, MaxZoom);
         ChartScale.ScaleX = clamped;
         ChartScale.ScaleY = clamped;
+        ZoomLevelChanged?.Invoke(clamped);
     }
 
     private void RenderInternal()
@@ -360,6 +493,13 @@ public partial class OrgChartView : UserControl
                 BeginRename(node, box);
             };
 
+            var focusItem = new MenuItem { Header = "Focus folder (Fit selection)" };
+            focusItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                FitSelectedToView();
+            };
+
             var deleteItem = new MenuItem
             {
                 Header = "Delete",
@@ -372,6 +512,7 @@ public partial class OrgChartView : UserControl
             };
 
             menu.Items.Add(openInExplorerItem);
+            menu.Items.Add(focusItem);
             menu.Items.Add(new Separator());
             menu.Items.Add(addChildItem);
             menu.Items.Add(addSiblingItem);

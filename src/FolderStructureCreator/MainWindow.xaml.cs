@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         OrgChartHost.AddChildRequested += node => ViewModel.AddChildFolderCommand.Execute(null);
         OrgChartHost.AddSiblingRequested += node => ViewModel.AddSiblingFolderCommand.Execute(null);
         OrgChartHost.DeleteRequested += node => ViewModel.DeleteNodeCommand.Execute(null);
+        OrgChartHost.ZoomLevelChanged += zoom => UpdateZoomPercentageDisplay(zoom);
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
@@ -32,6 +33,34 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (ViewModel.IsOrgChartView && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            if (e.Key is Key.OemPlus or Key.Add)
+            {
+                OrgChartHost.ZoomIn();
+                e.Handled = true;
+                return;
+            }
+            if (e.Key is Key.OemMinus or Key.Subtract)
+            {
+                OrgChartHost.ZoomOut();
+                e.Handled = true;
+                return;
+            }
+            if (e.Key is Key.D0 or Key.NumPad0)
+            {
+                OrgChartHost.ResetZoom();
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                OrgChartHost.FitToView();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             SearchTextBox.Focus();
@@ -51,7 +80,6 @@ public partial class MainWindow : Window
         if (ViewModel.IsOrgChartView)
         {
             OrgChartHost.Render(ViewModel.RootFolders, ViewModel.SelectedStructureNode);
-            OrgChartHost.BringSelectedIntoView();
         }
     }
 
@@ -168,7 +196,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private void UpdateZoomPercentageDisplay(double zoom)
+    {
+        ZoomPercentageButton.Content = $"{Math.Round(zoom * 100)}%";
+    }
+
     private void ZoomInOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomIn();
     private void ZoomOutOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomOut();
+    private void ResetZoomOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ResetZoom();
     private void FitOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToView();
 }
