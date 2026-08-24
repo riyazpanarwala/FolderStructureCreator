@@ -59,6 +59,8 @@ public partial class OrgChartView : UserControl
 
     private static readonly SolidColorBrush SelectedBrush = new(Color.FromRgb(0x0F, 0x76, 0x6E));
     private static readonly SolidColorBrush DragHoverBrush = new(Color.FromRgb(0x02, 0x84, 0xC7)); // Sky blue highlight for drag target
+    private static readonly SolidColorBrush SearchMatchBorderBrush = new(Color.FromRgb(0xD9, 0x77, 0x06)); // Gold/Amber border for search match
+    private static readonly SolidColorBrush SearchMatchBackgroundBrush = new(Color.FromRgb(0xFE, 0xF0, 0x8A)); // Bright yellow fill for search match
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
@@ -193,14 +195,15 @@ public partial class OrgChartView : UserControl
         {
             var (fill, border) = GetPalette(pos.Depth);
             bool isSelected = ReferenceEquals(node, _lastSelected);
+            bool isMatch = node.IsMatchingSearch;
 
             var box = new Border
             {
                 Width = BoxWidth,
                 Height = BoxHeight,
-                Background = new SolidColorBrush(fill),
-                BorderBrush = isSelected ? SelectedBrush : new SolidColorBrush(border),
-                BorderThickness = new Thickness(isSelected ? 2.5 : 1),
+                Background = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill),
+                BorderBrush = isSelected ? SelectedBrush : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border)),
+                BorderThickness = new Thickness((isSelected || isMatch) ? 2.5 : 1),
                 CornerRadius = new CornerRadius(6),
                 Cursor = Cursors.Hand,
                 ToolTip = node.Name

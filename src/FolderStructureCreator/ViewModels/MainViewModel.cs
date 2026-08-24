@@ -147,6 +147,51 @@ public class MainViewModel : ViewModelBase
 
     /// <summary>Raised whenever the plan's shape changes (add/remove/import/clear), so any view
     /// that draws its own visualization (like the org chart) knows to redraw.</summary>
+    private string _searchQuery = string.Empty;
+    public string SearchQuery
+    {
+        get => _searchQuery;
+        set
+        {
+            if (SetField(ref _searchQuery, value))
+            {
+                OnPropertyChanged(nameof(HasSearchQuery));
+                ApplySearch();
+            }
+        }
+    }
+
+    public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
+
+    private readonly List<FolderNode> _matchingSearchResults = new();
+    private int _currentSearchIndex = -1;
+    public int CurrentSearchIndex
+    {
+        get => _currentSearchIndex;
+        private set
+        {
+            if (SetField(ref _currentSearchIndex, value))
+            {
+                OnPropertyChanged(nameof(SearchMatchStatusText));
+                NavigateNextMatchCommand?.RaiseCanExecuteChanged();
+                NavigatePrevMatchCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public int SearchMatchCount => _matchingSearchResults.Count;
+    public bool HasSearchMatches => SearchMatchCount > 0;
+
+    public string SearchMatchStatusText
+    {
+        get
+        {
+            if (!HasSearchQuery) return string.Empty;
+            if (SearchMatchCount == 0) return "No matches";
+            return $"{CurrentSearchIndex + 1} of {SearchMatchCount} match{(SearchMatchCount == 1 ? "" : "es")}";
+        }
+    }
+
     public event Action? StructureChanged;
     private void RaiseStructureChanged() => StructureChanged?.Invoke();
 
@@ -168,6 +213,9 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ShowTreeViewCommand { get; }
     public RelayCommand ShowOrgChartViewCommand { get; }
     public RelayCommand ToggleDestinationSidebarCommand { get; }
+    public RelayCommand ClearSearchCommand { get; }
+    public RelayCommand NavigateNextMatchCommand { get; }
+    public RelayCommand NavigatePrevMatchCommand { get; }
 
     public MainViewModel()
     {
@@ -186,6 +234,9 @@ public class MainViewModel : ViewModelBase
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
+        ClearSearchCommand = new RelayCommand(_ => SearchQuery = string.Empty);
+        NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
+        NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
 
         LoadDrives();
         AddRootFolder(); // start with one editable root node so the tree isn't empty
@@ -195,6 +246,7 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasStructureNodes));
             ClearPlanCommand.RaiseCanExecuteChanged();
             CreateStructureCommand.RaiseCanExecuteChanged();
+            if (HasSearchQuery) ApplySearch();
         };
     }
 
@@ -610,6 +662,76 @@ public class MainViewModel : ViewModelBase
                 "Folder Not Found",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+        }
+    }
+
+    private void ApplySearch()
+    {
+        _matchingSearchResults.Clear();
+        var query = SearchQuery?.Trim();
+
+        void ScanNode(FolderNode node)
+        {
+            bool matches = !string.IsNullOrWhiteSpace(query) && node.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
+            node.IsMatchingSearch = matches;
+
+            if (matches)
+            {
+                _matchingSearchResults.Add(node);
+
+                // Expand all ancestor nodes up to root so matching items are visible in TreeView
+                var p = node.Parent;
+                while (p != null)
+                {
+                    p.IsExpanded = true;
+                    p = p.Parent;
+                }
+            }
+
+            foreach (var child in node.Children)
+                ScanNode(child);
+        }
+
+        foreach (var root in RootFolders)
+            ScanNode(root);
+
+        OnPropertyChanged(nameof(SearchMatchCount));
+        OnPropertyChanged(nameof(HasSearchMatches));
+        OnPropertyChanged(nameof(SearchMatchStatusText));
+        NavigateNextMatchCommand.RaiseCanExecuteChanged();
+        NavigatePrevMatchCommand.RaiseCanExecuteChanged();
+
+        if (_matchingSearchResults.Count > 0)
+        {
+            CurrentSearchIndex = 0;
+            SelectedStructureNode = _matchingSearchResults[0];
+        }
+        else
+        {
+            CurrentSearchIndex = -1;
+        }
+
+        RaiseStructureChanged();
+    }
+
+    private void NavigateSearchMatch(int direction)
+    {
+        if (_matchingSearchResults.Count == 0) return;
+
+        int newIndex = CurrentSearchIndex + direction;
+        if (newIndex >= _matchingSearchResults.Count)
+            newIndex = 0;
+        else if (newIndex < 0)
+            newIndex = _matchingSearchResults.Count - 1;
+
+        CurrentSearchIndex = newIndex;
+        SelectedStructureNode = _matchingSearchResults[newIndex];
+
+        var p = SelectedStructureNode.Parent;
+        while (p != null)
+        {
+            p.IsExpanded = true;
+            p = p.Parent;
         }
     }
 

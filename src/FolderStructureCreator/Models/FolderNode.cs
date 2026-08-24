@@ -15,6 +15,7 @@ public class FolderNode : INotifyPropertyChanged
     private bool _isExpanded = true;
     private bool _isSelected;
     private bool _isEditing;
+    private bool _isMatchingSearch;
 
     private string? _realPath;
 
@@ -82,6 +83,13 @@ public class FolderNode : INotifyPropertyChanged
     {
         get => _isEditing;
         set => SetField(ref _isEditing, value);
+    }
+
+    /// <summary>True when this node matches the active search query in the right panel.</summary>
+    public bool IsMatchingSearch
+    {
+        get => _isMatchingSearch;
+        set => SetField(ref _isMatchingSearch, value);
     }
 
     /// <summary>Total count of this node plus every descendant, folders and files together.</summary>
