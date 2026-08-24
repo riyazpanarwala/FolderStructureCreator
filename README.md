@@ -41,6 +41,7 @@ Right-clicking any folder node (in either Tree View or Org Chart View) provides 
 
 ### 📁 Live Computer Directory Browser & Targets
 - **Lazy-Loaded Windows Drives Browser** — Browse drives, pinned folders, and real computer directories on the left sidebar. Nothing is loaded until expanded, ensuring maximum performance even on huge drives.
+- **Natural Folder Sorting & Sort Order Toggle** — Folder names are sorted naturally by number first (`1, 2, 3 ... 10, 11`), followed by alphabetical names (`A-Z`). Includes a **Sort: A-Z ⬇ / Sort: Z-A ⬆** toolbar toggle to dynamically switch between ascending and descending sort order across pinned folders and drive trees.
 - **Pinned Folders** — Pin frequently used folder locations for quick target selection.
 - **One-Click Structure Creation** — Recursively creates every folder in your plan under the target directory path. Existing folders are preserved safely.
 - **Auto-Expansion** — After creation, the live browser automatically expands down to display all newly created folders.
@@ -69,6 +70,7 @@ src/FolderStructureCreator/
     OrgChartView.xaml(.cs)        Custom canvas-drawn interactive org-chart diagram (dendrogram renderer)
   Services/
     FileSystemService.cs          Bounded directory scanning, sanitization, disk creation & Recycle Bin operations
+    NaturalStringComparer.cs      Natural string comparer for numerical (1..10) and alphabetical (A-Z) sorting
     PinnedFoldersService.cs       Service to persist and manage pinned target locations
   ViewModels/
     MainViewModel.cs              Core MVVM ViewModel (commands, search, live sync, selection, navigation)
