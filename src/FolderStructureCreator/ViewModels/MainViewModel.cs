@@ -168,7 +168,14 @@ public class MainViewModel : ViewModelBase
 
     public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
 
-    private readonly List<FolderNode> _matchingSearchResults = new();
+    private bool _isSearchDropdownOpen;
+    public bool IsSearchDropdownOpen
+    {
+        get => _isSearchDropdownOpen;
+        set => SetField(ref _isSearchDropdownOpen, value);
+    }
+
+    public ObservableCollection<FolderNode> MatchingSearchResults { get; } = new();
     private int _currentSearchIndex = -1;
     public int CurrentSearchIndex
     {
@@ -184,7 +191,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public int SearchMatchCount => _matchingSearchResults.Count;
+    public int SearchMatchCount => MatchingSearchResults.Count;
     public bool HasSearchMatches => SearchMatchCount > 0;
 
     public string SearchMatchStatusText
@@ -231,6 +238,8 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ClearSearchCommand { get; }
     public RelayCommand NavigateNextMatchCommand { get; }
     public RelayCommand NavigatePrevMatchCommand { get; }
+    public RelayCommand SelectSearchResultCommand { get; }
+    public RelayCommand OpenSearchResultInExplorerCommand { get; }
     public RelayCommand PinSelectedFolderCommand { get; }
     public RelayCommand PinFolderCommand { get; }
     public RelayCommand UnpinFolderCommand { get; }
@@ -254,9 +263,26 @@ public class MainViewModel : ViewModelBase
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
-        ClearSearchCommand = new RelayCommand(_ => SearchQuery = string.Empty);
+        ClearSearchCommand = new RelayCommand(_ => { SearchQuery = string.Empty; IsSearchDropdownOpen = false; });
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
+        SelectSearchResultCommand = new RelayCommand(param =>
+        {
+            if (param is FolderNode node)
+            {
+                SelectedStructureNode = node;
+                IsSearchDropdownOpen = false;
+            }
+        });
+        OpenSearchResultInExplorerCommand = new RelayCommand(param =>
+        {
+            if (param is FolderNode node)
+            {
+                SelectedStructureNode = node;
+                IsSearchDropdownOpen = false;
+                OpenInExplorer(node);
+            }
+        });
         PinSelectedFolderCommand = new RelayCommand(_ => PinFolder(SelectedTargetNode?.FullPath), _ => SelectedTargetNode is { IsPlaceholder: false });
         PinFolderCommand = new RelayCommand(param => PinFolder(param as string ?? (param as FileSystemNode)?.FullPath ?? (param as PinnedFolder)?.Path));
         UnpinFolderCommand = new RelayCommand(param => UnpinFolder(param as PinnedFolder ?? PinnedFolders.FirstOrDefault(p => p.Path == (param as string))));
@@ -759,7 +785,7 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            _matchingSearchResults.Clear();
+            MatchingSearchResults.Clear();
             var query = SearchQuery?.Trim();
 
             void ScanNode(FolderNode node)
@@ -769,7 +795,7 @@ public class MainViewModel : ViewModelBase
 
                 if (matches)
                 {
-                    _matchingSearchResults.Add(node);
+                    MatchingSearchResults.Add(node);
 
                     // Expand all ancestor nodes up to root so matching items are visible in TreeView
                     var p = node.Parent;
@@ -793,9 +819,11 @@ public class MainViewModel : ViewModelBase
             NavigateNextMatchCommand.RaiseCanExecuteChanged();
             NavigatePrevMatchCommand.RaiseCanExecuteChanged();
 
-            if (_matchingSearchResults.Count > 0)
+            IsSearchDropdownOpen = HasSearchQuery && MatchingSearchResults.Count > 0;
+
+            if (MatchingSearchResults.Count > 0)
             {
-                int index = SelectedStructureNode != null ? _matchingSearchResults.IndexOf(SelectedStructureNode) : -1;
+                int index = SelectedStructureNode != null ? MatchingSearchResults.IndexOf(SelectedStructureNode) : -1;
                 if (index >= 0)
                 {
                     CurrentSearchIndex = index;
@@ -803,7 +831,7 @@ public class MainViewModel : ViewModelBase
                 else
                 {
                     CurrentSearchIndex = 0;
-                    SelectedStructureNode = _matchingSearchResults[0];
+                    SelectedStructureNode = MatchingSearchResults[0];
                 }
             }
             else
@@ -821,16 +849,16 @@ public class MainViewModel : ViewModelBase
 
     private void NavigateSearchMatch(int direction)
     {
-        if (_matchingSearchResults.Count == 0) return;
+        if (MatchingSearchResults.Count == 0) return;
 
         int newIndex = CurrentSearchIndex + direction;
-        if (newIndex >= _matchingSearchResults.Count)
+        if (newIndex >= MatchingSearchResults.Count)
             newIndex = 0;
         else if (newIndex < 0)
-            newIndex = _matchingSearchResults.Count - 1;
+            newIndex = MatchingSearchResults.Count - 1;
 
         CurrentSearchIndex = newIndex;
-        SelectedStructureNode = _matchingSearchResults[newIndex];
+        SelectedStructureNode = MatchingSearchResults[newIndex];
 
         var p = SelectedStructureNode.Parent;
         while (p != null)

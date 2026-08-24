@@ -76,6 +76,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SearchTextBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.HasSearchQuery && ViewModel.SearchMatchCount > 0)
+        {
+            ViewModel.IsSearchDropdownOpen = true;
+        }
+    }
+
     private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)
@@ -94,7 +102,14 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            ViewModel.ClearSearchCommand.Execute(null);
+            if (ViewModel.IsSearchDropdownOpen)
+            {
+                ViewModel.IsSearchDropdownOpen = false;
+            }
+            else
+            {
+                ViewModel.ClearSearchCommand.Execute(null);
+            }
             e.Handled = true;
         }
     }

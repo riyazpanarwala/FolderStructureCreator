@@ -92,6 +92,22 @@ public class FolderNode : INotifyPropertyChanged
         set => SetField(ref _isMatchingSearch, value);
     }
 
+    /// <summary>Returns path breadcrumb from root to this node (e.g. "Root / SubFolder / Target").</summary>
+    public string FullPathDisplay
+    {
+        get
+        {
+            var stack = new System.Collections.Generic.Stack<string>();
+            var curr = this;
+            while (curr != null)
+            {
+                stack.Push(curr.Name);
+                curr = curr.Parent;
+            }
+            return string.Join(" / ", stack);
+        }
+    }
+
     /// <summary>Total count of this node plus every descendant, folders and files together.</summary>
     public int CountAll()
     {
