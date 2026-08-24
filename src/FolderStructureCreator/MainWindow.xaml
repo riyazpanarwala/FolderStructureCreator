@@ -20,9 +20,27 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="Folder Structure Creator" FontSize="20" FontWeight="Bold"/>
-                <TextBlock Text="Design a reusable folder plan, then create it in a destination." Style="{StaticResource SubText}"/>
+                <TextBlock Text="Design a reusable folder plan, then create it in a target destination." Style="{StaticResource SubText}"/>
             </StackPanel>
-            <TextBlock Grid.Column="1" Text="1. Plan   2. Destination   3. Create" Style="{StaticResource SubText}" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Style="{StaticResource StepBadgeActive}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="1. Build Blueprint" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="➔" Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
+                <Border Style="{StaticResource StepBadge}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="2. Select Destination" FontSize="11.5" FontWeight="Medium" Foreground="{StaticResource BrushTextPrimary}"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="➔" Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
+                <Border Style="{StaticResource StepBadge}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="3. Create Folders" FontSize="11.5" FontWeight="Medium" Foreground="{StaticResource BrushTextPrimary}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">
@@ -32,7 +50,12 @@
                 <DockPanel Margin="12">
                     <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel><TextBlock Text="Destination" Style="{StaticResource SectionHeader}"/><TextBlock Text="Select where the plan will be created" Style="{StaticResource SubText}" TextWrapping="Wrap"/></StackPanel>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💻 Real Computer Drives" Style="{StaticResource SectionHeader}"/>
+                            </StackPanel>
+                            <TextBlock Text="Select target destination folder on your disk" Style="{StaticResource SubText}" TextWrapping="Wrap"/>
+                        </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                             <Button Content="📌 Pin" Style="{StaticResource ToolButton}" Command="{Binding PinSelectedFolderCommand}" ToolTip="Pin selected folder for easy chart view access"/>
                             <Button Content="Use as plan" Style="{StaticResource ToolButton}" Command="{Binding ShowSelectedFolderOrgChartCommand}" ToolTip="Copy the selected folder's hierarchy into the plan"/>
@@ -46,7 +69,7 @@
                             <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="📌 Pinned Folders" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource BrushTextPrimary}"/>
-                                <TextBlock Grid.Column="1" Text="Quick Chart Access" Style="{StaticResource SubText}" FontSize="10"/>
+                                <TextBlock Grid.Column="1" Text="Quick Target Access" Style="{StaticResource SubText}" FontSize="10"/>
                             </Grid>
                             <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding PinnedFolders}">
@@ -103,7 +126,10 @@
                 <DockPanel Margin="12">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel><TextBlock Text="Folder plan" Style="{StaticResource SectionHeader}"/><TextBlock Style="{StaticResource SubText}"><Run Text="{Binding TotalFolderCount, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" folders in this plan"/></TextBlock></StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="📝 Folder Blueprint (Draft)" Style="{StaticResource SectionHeader}"/>
+                                <TextBlock Style="{StaticResource SubText}"><Run Text="{Binding TotalFolderCount, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" folders in this plan"/></TextBlock>
+                            </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <CheckBox Content="Live computer sync" IsChecked="{Binding IsLiveSyncMode}" ToolTip="When checked, adding, renaming, deleting (Recycle Bin), and drag &amp; drop moving directly updates physical folders on disk." VerticalAlignment="Center" Margin="0,0,12,0"/>
                                 <Button Content="Tree" Command="{Binding ShowTreeViewCommand}" ToolTip="Editable indented list view"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="False"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
@@ -193,10 +219,23 @@
 
         <!-- Destination, status, and final action remain together throughout the workflow. -->
         <Border Grid.Row="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,0">
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,14,0"><TextBlock Text="DESTINATION PATH" Style="{StaticResource SubText}" Margin="2,0,0,4"/><TextBox Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" Tag="Select a folder on left or enter destination path..." FontFamily="Consolas" ToolTip="Select a folder above or enter a valid path"/></StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Style="{StaticResource SubText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,14,14,0"/>
-                <Button Grid.Column="2" Content="Create structure" Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="Create every folder in the plan under this destination" VerticalAlignment="Center" Margin="0,14,0,0"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                    <TextBlock Text="🎯 DESTINATION PATH" Style="{StaticResource SubText}" FontWeight="SemiBold" Margin="2,0,0,4"/>
+                    <TextBox Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" Tag="Select a folder on left or enter destination path..." FontFamily="Consolas" ToolTip="Select a folder above or enter a valid path"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Style="{StaticResource SubText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="Create every folder in the plan under this destination" VerticalAlignment="Center" Padding="16,8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🚀 " FontSize="12.5"/>
+                        <TextBlock Text="Create structure" FontSize="12.5" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
     </Grid>

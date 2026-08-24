@@ -89,6 +89,22 @@
                 <Setter Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
             </Style>
 
+            <!-- Workflow Step Badge Styles -->
+            <Style x:Key="StepBadge" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource BrushPanel}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="Padding" Value="10,4"/>
+                <Setter Property="Margin" Value="0,0,6,0"/>
+            </Style>
+
+            <Style x:Key="StepBadgeActive" TargetType="Border" BasedOn="{StaticResource StepBadge}">
+                <Setter Property="Background" Value="{StaticResource BrushAccentSoft}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+            </Style>
+
+
             <Style TargetType="TextBox">
                 <Setter Property="Padding" Value="8,6"/>
                 <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
