@@ -27,6 +27,17 @@ public partial class MainWindow : Window
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
+        KeyDown += Window_KeyDown;
+    }
+
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            SearchTextBox.Focus();
+            SearchTextBox.SelectAll();
+            e.Handled = true;
+        }
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -38,7 +49,10 @@ public partial class MainWindow : Window
     private void RefreshOrgChartIfVisible()
     {
         if (ViewModel.IsOrgChartView)
+        {
             OrgChartHost.Render(ViewModel.RootFolders, ViewModel.SelectedStructureNode);
+            OrgChartHost.BringSelectedIntoView();
+        }
     }
 
     // TreeView.SelectedItem is read-only, so we bridge it into the view model here.
@@ -52,6 +66,37 @@ public partial class MainWindow : Window
     {
         if (e.NewValue is FolderNode node)
             ViewModel.SelectedStructureNode = node;
+    }
+
+    private void TreeViewItem_Selected(object sender, RoutedEventArgs e)
+    {
+        if (sender is TreeViewItem item)
+        {
+            item.BringIntoView();
+        }
+    }
+
+    private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                if (ViewModel.NavigatePrevMatchCommand.CanExecute(null))
+                    ViewModel.NavigatePrevMatchCommand.Execute(null);
+            }
+            else
+            {
+                if (ViewModel.NavigateNextMatchCommand.CanExecute(null))
+                    ViewModel.NavigateNextMatchCommand.Execute(null);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ViewModel.ClearSearchCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void TreeViewItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

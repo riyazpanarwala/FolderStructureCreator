@@ -198,7 +198,17 @@ public class MainViewModel : ViewModelBase
     }
 
     public event Action? StructureChanged;
-    private void RaiseStructureChanged() => StructureChanged?.Invoke();
+    private bool _isApplyingSearch;
+
+    private void RaiseStructureChanged()
+    {
+        if (HasSearchQuery && !_isApplyingSearch)
+        {
+            ApplySearch();
+            return;
+        }
+        StructureChanged?.Invoke();
+    }
 
     public int TotalFolderCount => RootFolders.Sum(r => r.CountFoldersOnly());
 
@@ -744,51 +754,69 @@ public class MainViewModel : ViewModelBase
 
     private void ApplySearch()
     {
-        _matchingSearchResults.Clear();
-        var query = SearchQuery?.Trim();
+        if (_isApplyingSearch) return;
+        _isApplyingSearch = true;
 
-        void ScanNode(FolderNode node)
+        try
         {
-            bool matches = !string.IsNullOrWhiteSpace(query) && node.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
-            node.IsMatchingSearch = matches;
+            _matchingSearchResults.Clear();
+            var query = SearchQuery?.Trim();
 
-            if (matches)
+            void ScanNode(FolderNode node)
             {
-                _matchingSearchResults.Add(node);
+                bool matches = !string.IsNullOrWhiteSpace(query) && node.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
+                node.IsMatchingSearch = matches;
 
-                // Expand all ancestor nodes up to root so matching items are visible in TreeView
-                var p = node.Parent;
-                while (p != null)
+                if (matches)
                 {
-                    p.IsExpanded = true;
-                    p = p.Parent;
+                    _matchingSearchResults.Add(node);
+
+                    // Expand all ancestor nodes up to root so matching items are visible in TreeView
+                    var p = node.Parent;
+                    while (p != null)
+                    {
+                        p.IsExpanded = true;
+                        p = p.Parent;
+                    }
                 }
+
+                foreach (var child in node.Children)
+                    ScanNode(child);
             }
 
-            foreach (var child in node.Children)
-                ScanNode(child);
+            foreach (var root in RootFolders)
+                ScanNode(root);
+
+            OnPropertyChanged(nameof(SearchMatchCount));
+            OnPropertyChanged(nameof(HasSearchMatches));
+            OnPropertyChanged(nameof(SearchMatchStatusText));
+            NavigateNextMatchCommand.RaiseCanExecuteChanged();
+            NavigatePrevMatchCommand.RaiseCanExecuteChanged();
+
+            if (_matchingSearchResults.Count > 0)
+            {
+                int index = SelectedStructureNode != null ? _matchingSearchResults.IndexOf(SelectedStructureNode) : -1;
+                if (index >= 0)
+                {
+                    CurrentSearchIndex = index;
+                }
+                else
+                {
+                    CurrentSearchIndex = 0;
+                    SelectedStructureNode = _matchingSearchResults[0];
+                }
+            }
+            else
+            {
+                CurrentSearchIndex = -1;
+            }
         }
-
-        foreach (var root in RootFolders)
-            ScanNode(root);
-
-        OnPropertyChanged(nameof(SearchMatchCount));
-        OnPropertyChanged(nameof(HasSearchMatches));
-        OnPropertyChanged(nameof(SearchMatchStatusText));
-        NavigateNextMatchCommand.RaiseCanExecuteChanged();
-        NavigatePrevMatchCommand.RaiseCanExecuteChanged();
-
-        if (_matchingSearchResults.Count > 0)
+        finally
         {
-            CurrentSearchIndex = 0;
-            SelectedStructureNode = _matchingSearchResults[0];
-        }
-        else
-        {
-            CurrentSearchIndex = -1;
+            _isApplyingSearch = false;
         }
 
-        RaiseStructureChanged();
+        StructureChanged?.Invoke();
     }
 
     private void NavigateSearchMatch(int direction)

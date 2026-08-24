@@ -84,6 +84,46 @@ public partial class OrgChartView : UserControl
         _lastRoots = roots.ToList();
         _lastSelected = selected;
         RenderInternal();
+        BringSelectedIntoView();
+    }
+
+    /// <summary>Scrolls/centers the ScrollViewer viewport on the selected node box if present.</summary>
+    public void BringSelectedIntoView()
+    {
+        if (_lastSelected == null) return;
+
+        void PerformScroll()
+        {
+            var selectedEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
+            if (selectedEntry.Key is not Border box) return;
+
+            double scale = ChartScale.ScaleX;
+            double left = Canvas.GetLeft(box) * scale;
+            double top = Canvas.GetTop(box) * scale;
+
+            double boxWidthScaled = BoxWidth * scale;
+            double boxHeightScaled = BoxHeight * scale;
+
+            double viewportWidth = ChartScrollViewer.ViewportWidth;
+            double viewportHeight = ChartScrollViewer.ViewportHeight;
+
+            if (viewportWidth <= 0 || viewportHeight <= 0) return;
+
+            double targetX = left + (boxWidthScaled / 2.0) - (viewportWidth / 2.0);
+            double targetY = top + (boxHeightScaled / 2.0) - (viewportHeight / 2.0);
+
+            ChartScrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetX));
+            ChartScrollViewer.ScrollToVerticalOffset(Math.Max(0, targetY));
+        }
+
+        if (ChartScrollViewer.ViewportWidth > 0 && ChartScrollViewer.ViewportHeight > 0)
+        {
+            PerformScroll();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(PerformScroll, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
     }
 
     public void ZoomIn() => SetZoom(ChartScale.ScaleX + 0.15);

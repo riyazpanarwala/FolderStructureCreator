@@ -161,13 +161,13 @@
                         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding QuickAddNames, UpdateSourceTrigger=PropertyChanged}" Tag="Add names: src, docs, tests" ToolTip="Comma-separated names; added under the selected folder"><TextBox.InputBindings><KeyBinding Key="Enter" Command="{Binding QuickAddCommand}"/></TextBox.InputBindings></TextBox><Button Grid.Column="1" Content="Add" Style="{StaticResource ToolButton}" Margin="8,0,0,0" Command="{Binding QuickAddCommand}" Visibility="{Binding HasQuickAddText, Converter={StaticResource BoolToVis}}"/></Grid>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Tag="🔍 Search folders in plan..." ToolTip="Search folders across tree and chart views"/>
+                            <TextBox x:Name="SearchTextBox" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Tag="🔍 Search folders in plan..." ToolTip="Search folders across tree and chart views (Enter = Next, Shift+Enter = Prev, Esc = Clear, Ctrl+F = Focus)" KeyDown="SearchTextBox_KeyDown"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasSearchQuery, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding SearchMatchStatusText}" Style="{StaticResource SubText}" VerticalAlignment="Center" Margin="2,0,6,0"/>
-                                <Button Content="‹" Style="{StaticResource ToolButton}" Command="{Binding NavigatePrevMatchCommand}" ToolTip="Previous match" Padding="6,1"/>
-                                <Button Content="›" Style="{StaticResource ToolButton}" Command="{Binding NavigateNextMatchCommand}" ToolTip="Next match" Padding="6,1" Margin="2,0,0,0"/>
+                                <Button Content="‹" Style="{StaticResource ToolButton}" Command="{Binding NavigatePrevMatchCommand}" ToolTip="Previous match (Shift+Enter)" Padding="6,1"/>
+                                <Button Content="›" Style="{StaticResource ToolButton}" Command="{Binding NavigateNextMatchCommand}" ToolTip="Next match (Enter)" Padding="6,1" Margin="2,0,0,0"/>
                             </StackPanel>
-                            <Button Grid.Column="2" Content="✕" Style="{StaticResource ToolButton}" Margin="4,0,0,0" Command="{Binding ClearSearchCommand}" ToolTip="Clear search" Visibility="{Binding HasSearchQuery, Converter={StaticResource BoolToVis}}"/>
+                            <Button Grid.Column="2" Content="✕" Style="{StaticResource ToolButton}" Margin="4,0,0,0" Command="{Binding ClearSearchCommand}" ToolTip="Clear search (Esc)" Visibility="{Binding HasSearchQuery, Converter={StaticResource BoolToVis}}"/>
                         </Grid>
                         <Border Background="{StaticResource BrushAccentSoft}" CornerRadius="5" Padding="8,5" Margin="0,8,0,0" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Double-click to rename. Drag &amp; drop a box onto another to move it." Style="{StaticResource SubText}" VerticalAlignment="Center"/><StackPanel Grid.Column="1" Orientation="Horizontal"><Button Content="Toggle destination" Style="{StaticResource ToolButton}" Command="{Binding ToggleDestinationSidebarCommand}" ToolTip="Collapse or restore the destination sidebar" Visibility="{Binding ShouldShowDestinationSidebarToggle, Converter={StaticResource BoolToVis}}"/><Button Content="−" Style="{StaticResource ToolButton}" Click="ZoomOutOrgChart_Click" ToolTip="Zoom out"/><Button Content="Fit" Style="{StaticResource ToolButton}" Click="FitOrgChart_Click" ToolTip="Fit chart to available space"/><Button Content="+" Style="{StaticResource ToolButton}" Click="ZoomInOrgChart_Click" ToolTip="Zoom in"/></StackPanel></Grid></Border>
                     </StackPanel>
@@ -179,6 +179,7 @@
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                     <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                     <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}"/>
+                                    <EventSetter Event="Selected" Handler="TreeViewItem_Selected"/>
                                     <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown"/>
                                     <Setter Property="ContextMenu">
                                         <Setter.Value>
