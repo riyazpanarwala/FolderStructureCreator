@@ -18,6 +18,10 @@ public class MainViewModel : ViewModelBase
     // ---- Left pane: live Windows directory browser ----
     public ObservableCollection<FileSystemNode> Drives { get; } = new();
 
+    // ---- Pinned Folders ----
+    public ObservableCollection<PinnedFolder> PinnedFolders { get; } = new();
+    public bool HasPinnedFolders => PinnedFolders.Count > 0;
+
     private FileSystemNode? _selectedTargetNode;
     public FileSystemNode? SelectedTargetNode
     {
@@ -31,6 +35,7 @@ public class MainViewModel : ViewModelBase
             }
 
             ShowSelectedFolderOrgChartCommand?.RaiseCanExecuteChanged();
+            PinSelectedFolderCommand?.RaiseCanExecuteChanged();
         }
     }
 
@@ -216,6 +221,11 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ClearSearchCommand { get; }
     public RelayCommand NavigateNextMatchCommand { get; }
     public RelayCommand NavigatePrevMatchCommand { get; }
+    public RelayCommand PinSelectedFolderCommand { get; }
+    public RelayCommand PinFolderCommand { get; }
+    public RelayCommand UnpinFolderCommand { get; }
+    public RelayCommand ShowPinnedFolderChartCommand { get; }
+    public RelayCommand SelectPinnedFolderCommand { get; }
 
     public MainViewModel()
     {
@@ -237,8 +247,14 @@ public class MainViewModel : ViewModelBase
         ClearSearchCommand = new RelayCommand(_ => SearchQuery = string.Empty);
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
+        PinSelectedFolderCommand = new RelayCommand(_ => PinFolder(SelectedTargetNode?.FullPath), _ => SelectedTargetNode is { IsPlaceholder: false });
+        PinFolderCommand = new RelayCommand(param => PinFolder(param as string ?? (param as FileSystemNode)?.FullPath ?? (param as PinnedFolder)?.Path));
+        UnpinFolderCommand = new RelayCommand(param => UnpinFolder(param as PinnedFolder ?? PinnedFolders.FirstOrDefault(p => p.Path == (param as string))));
+        ShowPinnedFolderChartCommand = new RelayCommand(async param => await ShowFolderOrgChartFromPathAsync(param as string ?? (param as PinnedFolder)?.Path));
+        SelectPinnedFolderCommand = new RelayCommand(param => SelectPinnedFolder(param as PinnedFolder ?? (param is string s ? new PinnedFolder(s) : null)));
 
         LoadDrives();
+        LoadPinnedFolders();
         AddRootFolder(); // start with one editable root node so the tree isn't empty
         RootFolders.CollectionChanged += (_, _) =>
         {
@@ -257,25 +273,75 @@ public class MainViewModel : ViewModelBase
             Drives.Add(new FileSystemNode(drivePath, drivePath));
     }
 
-    /// <summary>
-    /// Copies the currently selected real folder into the editable plan and shows its
-    /// hierarchy as the org chart. This is the left-pane equivalent of choosing a
-    /// reference folder through the file picker.
-    /// </summary>
-    private async void ShowSelectedFolderOrgChart()
+    private void LoadPinnedFolders()
     {
-        if (SelectedTargetNode is not { IsPlaceholder: false } node) return;
+        PinnedFolders.Clear();
+        foreach (var pinned in PinnedFoldersService.LoadPinnedFolders())
+            PinnedFolders.Add(pinned);
+        OnPropertyChanged(nameof(HasPinnedFolders));
+    }
 
-        StatusMessage = $"Reading \"{node.Name}\" for the org chart…";
+    public void PinFolder(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        path = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Directory.Exists(path))
+        {
+            StatusMessage = $"Cannot pin folder: \"{path}\" does not exist.";
+            return;
+        }
+
+        if (PinnedFolders.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
+        {
+            StatusMessage = $"\"{path}\" is already pinned.";
+            return;
+        }
+
+        var pinned = new PinnedFolder(path);
+        PinnedFolders.Add(pinned);
+        PinnedFoldersService.SavePinnedFolders(PinnedFolders);
+        OnPropertyChanged(nameof(HasPinnedFolders));
+        StatusMessage = $"Pinned folder \"{pinned.Name}\" to the left panel.";
+    }
+
+    public void UnpinFolder(PinnedFolder? pinned)
+    {
+        if (pinned == null) return;
+        PinnedFolders.Remove(pinned);
+        PinnedFoldersService.SavePinnedFolders(PinnedFolders);
+        OnPropertyChanged(nameof(HasPinnedFolders));
+        StatusMessage = $"Unpinned folder \"{pinned.Name}\".";
+    }
+
+    public void SelectPinnedFolder(PinnedFolder? pinned)
+    {
+        if (pinned == null || string.IsNullOrWhiteSpace(pinned.Path)) return;
+        TargetPath = pinned.Path;
+        StatusMessage = $"Selected destination target: \"{pinned.Path}\"";
+    }
+
+    public async Task ShowFolderOrgChartFromPathAsync(string? folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+        {
+            StatusMessage = $"Folder path does not exist: \"{folderPath}\"";
+            return;
+        }
+
+        var name = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrEmpty(name)) name = folderPath;
+
+        StatusMessage = $"Reading \"{name}\" for the org chart…";
 
         try
         {
-            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(node.FullPath, MaxOrgChartNodes));
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, MaxOrgChartNodes));
             RootFolders.Clear();
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
+            TargetPath = folderPath;
             IsOrgChartView = true;
-            IsLiveSyncMode = true; // Auto-enable live computer sync when opening a real directory
+            IsLiveSyncMode = true;
 
             StatusMessage = importResult.Truncated
                 ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). Live computer sync enabled."
@@ -286,8 +352,19 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
         {
-            StatusMessage = $"Could not read the selected folder: {ex.Message}";
+            StatusMessage = $"Could not read the folder: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Copies the currently selected real folder into the editable plan and shows its
+    /// hierarchy as the org chart. This is the left-pane equivalent of choosing a
+    /// reference folder through the file picker.
+    /// </summary>
+    private async void ShowSelectedFolderOrgChart()
+    {
+        if (SelectedTargetNode is not { IsPlaceholder: false } node) return;
+        await ShowFolderOrgChartFromPathAsync(node.FullPath);
     }
 
     // ---- Structure editing ----

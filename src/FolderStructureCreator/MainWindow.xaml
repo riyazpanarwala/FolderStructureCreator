@@ -34,12 +34,65 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel><TextBlock Text="Destination" Style="{StaticResource SectionHeader}"/><TextBlock Text="Select where the plan will be created" Style="{StaticResource SubText}" TextWrapping="Wrap"/></StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button Content="📌 Pin" Style="{StaticResource ToolButton}" Command="{Binding PinSelectedFolderCommand}" ToolTip="Pin selected folder for easy chart view access"/>
                             <Button Content="Use as plan" Style="{StaticResource ToolButton}" Command="{Binding ShowSelectedFolderOrgChartCommand}" ToolTip="Copy the selected folder's hierarchy into the plan"/>
                             <Button Content="Refresh" Style="{StaticResource ToolButton}" Command="{Binding RefreshDrivesCommand}" ToolTip="Refresh available drives"/>
                         </StackPanel>
                     </Grid>
+
+                    <!-- Pinned Folders Section -->
+                    <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="📌 Pinned Folders" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource BrushTextPrimary}"/>
+                                <TextBlock Grid.Column="1" Text="Quick Chart Access" Style="{StaticResource SubText}" FontSize="10"/>
+                            </Grid>
+                            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding PinnedFolders}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,2" Padding="6,4" Background="{StaticResource BrushPanel}" CornerRadius="4" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" ToolTip="{Binding Path}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="📁 " FontSize="11"/>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="11.5" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                        <Button Content="📊 Chart" Style="{StaticResource ToolButton}" Padding="5,2" FontSize="10.5" Command="{Binding DataContext.ShowPinnedFolderChartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Open chart view for this pinned folder"/>
+                                                        <Button Content="🎯" Style="{StaticResource ToolButton}" Padding="4,2" FontSize="10.5" Margin="2,0,0,0" Command="{Binding DataContext.SelectPinnedFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Select as target destination"/>
+                                                        <Button Content="✕" Style="{StaticResource ToolButton}" Padding="4,2" FontSize="10.5" Margin="2,0,0,0" Command="{Binding DataContext.UnpinFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Unpin folder"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
                     <TreeView x:Name="DirectoryTreeView" ItemsSource="{Binding Drives}" SelectedItemChanged="DirectoryTreeView_SelectedItemChanged">
-                        <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/><Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}"/>
+                                <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown"/>
+                                <Setter Property="ContextMenu">
+                                    <Setter.Value>
+                                        <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                            <MenuItem Header="📊 View Chart" Command="{Binding ShowSelectedFolderOrgChartCommand}"/>
+                                            <MenuItem Header="📌 Pin folder" Command="{Binding PinSelectedFolderCommand}"/>
+                                        </ContextMenu>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}"><TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/></HierarchicalDataTemplate></TreeView.ItemTemplate>
                     </TreeView>
                 </DockPanel>
@@ -82,10 +135,11 @@
                                 <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                     <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}"/>
                                     <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown"/>
                                     <Setter Property="ContextMenu">
                                         <Setter.Value>
-                                            <ContextMenu DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}">
+                                            <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
                                                 <MenuItem Header="Open in Explorer" Command="{Binding OpenInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                 <Separator/>
                                                 <MenuItem Header="Add child" Command="{Binding AddChildFolderCommand}"/>
