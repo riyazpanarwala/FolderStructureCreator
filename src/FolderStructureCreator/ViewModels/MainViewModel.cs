@@ -161,6 +161,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand RefreshDrivesCommand { get; }
     public RelayCommand ShowSelectedFolderOrgChartCommand { get; }
     public RelayCommand CreateStructureCommand { get; }
+    public RelayCommand OpenInExplorerCommand { get; }
     public RelayCommand StartRenameCommand { get; }
     public RelayCommand ImportFromReferenceCommand { get; }
     public RelayCommand ClearPlanCommand { get; }
@@ -178,6 +179,7 @@ public class MainViewModel : ViewModelBase
         RefreshDrivesCommand = new RelayCommand(_ => LoadDrives());
         ShowSelectedFolderOrgChartCommand = new RelayCommand(_ => ShowSelectedFolderOrgChart(), _ => SelectedTargetNode is { IsPlaceholder: false });
         CreateStructureCommand = new RelayCommand(_ => CreateStructure(), _ => CanCreateStructure());
+        OpenInExplorerCommand = new RelayCommand(param => OpenInExplorer(param as FolderNode), _ => SelectedStructureNode != null || RootFolders.Count > 0);
         StartRenameCommand = new RelayCommand(param => StartRename(param as FolderNode));
         ImportFromReferenceCommand = new RelayCommand(async _ => await ImportFromReferenceAsync());
         ClearPlanCommand = new RelayCommand(_ => ClearPlan(), _ => RootFolders.Count > 0);
@@ -577,6 +579,38 @@ public class MainViewModel : ViewModelBase
 
         SelectedStructureNode = sourceNode;
         RaiseStructureChanged();
+    }
+
+    public void OpenInExplorer(FolderNode? node)
+    {
+        node ??= SelectedStructureNode;
+        if (node is null) return;
+
+        string targetPath = ComputeNodePathRelativeToTarget(node, TargetPath);
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            StatusMessage = $"Cannot open in Explorer: No valid path for \"{node.Name}\".";
+            return;
+        }
+
+        var result = FileSystemService.OpenInExplorer(targetPath);
+        if (result.Success)
+        {
+            StatusMessage = $"Opened in Explorer: \"{result.OpenedPath}\"";
+        }
+        else if (result.Error == "PathDoesNotExistButParentOpened")
+        {
+            StatusMessage = $"\"{node.Name}\" does not exist on disk yet. Opened parent folder: \"{result.OpenedPath}\"";
+        }
+        else
+        {
+            StatusMessage = $"Could not open in Explorer: \"{node.Name}\" does not exist on disk yet.";
+            MessageBox.Show(
+                $"The folder \"{node.Name}\" does not exist on disk yet.\n\nPath: {targetPath}\n\nCreate the structure or enable Live Computer Sync first.",
+                "Folder Not Found",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
     }
 
     private void StartRename(FolderNode? node)

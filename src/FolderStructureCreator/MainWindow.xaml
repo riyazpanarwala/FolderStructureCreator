@@ -76,6 +76,8 @@
                                     <Setter Property="ContextMenu">
                                         <Setter.Value>
                                             <ContextMenu DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}">
+                                                <MenuItem Header="Open in Explorer" Command="{Binding OpenInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                <Separator/>
                                                 <MenuItem Header="Add child" Command="{Binding AddChildFolderCommand}"/>
                                                 <MenuItem Header="Add sibling" Command="{Binding AddSiblingFolderCommand}"/>
                                                 <Separator/>

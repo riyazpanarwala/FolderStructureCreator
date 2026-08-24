@@ -29,6 +29,9 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised when a node box is dragged and dropped onto another node box (moving/re-parenting).</summary>
     public event Action<FolderNode, FolderNode>? NodeMoved;
 
+    /// <summary>Raised when Open in Explorer is clicked in the node context menu.</summary>
+    public event Action<FolderNode>? OpenInExplorerRequested;
+
     /// <summary>Raised when Add Child is clicked in the node context menu.</summary>
     public event Action<FolderNode>? AddChildRequested;
 
@@ -286,6 +289,13 @@ public partial class OrgChartView : UserControl
             };
 
             var menu = new ContextMenu();
+            var openInExplorerItem = new MenuItem { Header = "Open in Explorer" };
+            openInExplorerItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                OpenInExplorerRequested?.Invoke(node);
+            };
+
             var addChildItem = new MenuItem { Header = "Add child" };
             addChildItem.Click += (_, _) =>
             {
@@ -318,6 +328,8 @@ public partial class OrgChartView : UserControl
                 DeleteRequested?.Invoke(node);
             };
 
+            menu.Items.Add(openInExplorerItem);
+            menu.Items.Add(new Separator());
             menu.Items.Add(addChildItem);
             menu.Items.Add(addSiblingItem);
             menu.Items.Add(new Separator());

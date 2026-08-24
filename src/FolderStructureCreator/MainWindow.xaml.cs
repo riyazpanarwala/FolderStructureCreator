@@ -20,6 +20,7 @@ public partial class MainWindow : Window
         OrgChartHost.NodeClicked += node => ViewModel.SelectedStructureNode = node;
         OrgChartHost.NodeRenamed += (node, newName) => ViewModel.RenameNode(node, newName);
         OrgChartHost.NodeMoved += (source, target) => ViewModel.MoveNode(source, target);
+        OrgChartHost.OpenInExplorerRequested += node => ViewModel.OpenInExplorerCommand.Execute(node);
         OrgChartHost.AddChildRequested += node => ViewModel.AddChildFolderCommand.Execute(null);
         OrgChartHost.AddSiblingRequested += node => ViewModel.AddSiblingFolderCommand.Execute(null);
         OrgChartHost.DeleteRequested += node => ViewModel.DeleteNodeCommand.Execute(null);

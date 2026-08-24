@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -396,5 +397,58 @@ public static class FileSystemService
 
         foreach (var child in node.Children)
             CreateRecursive(child, fullPath, result);
+    }
+
+    /// <summary>
+    /// Opens Windows Explorer for the specified file or folder path.
+    /// If the path does not exist on disk, attempts to open the nearest existing parent directory.
+    /// </summary>
+    public static (bool Success, string OpenedPath, string Error) OpenInExplorer(string path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return (false, string.Empty, "Path is empty.");
+
+            var fullPath = Path.GetFullPath(path);
+
+            if (File.Exists(fullPath))
+            {
+                Process.Start("explorer.exe", $"/select,\"{fullPath}\"");
+                return (true, fullPath, string.Empty);
+            }
+
+            if (Directory.Exists(fullPath))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = fullPath,
+                    UseShellExecute = true
+                });
+                return (true, fullPath, string.Empty);
+            }
+
+            // Walk up to find nearest existing parent directory
+            var parent = Path.GetDirectoryName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            while (!string.IsNullOrEmpty(parent))
+            {
+                if (Directory.Exists(parent))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = parent,
+                        UseShellExecute = true
+                    });
+                    return (false, parent, "PathDoesNotExistButParentOpened");
+                }
+                parent = Path.GetDirectoryName(parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+
+            return (false, string.Empty, "Path does not exist on disk.");
+        }
+        catch (Exception ex)
+        {
+            return (false, string.Empty, ex.Message);
+        }
     }
 }
