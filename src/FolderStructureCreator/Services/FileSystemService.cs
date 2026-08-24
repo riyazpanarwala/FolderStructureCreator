@@ -56,6 +56,8 @@ public static class FileSystemService
         public bool Truncated { get; set; }
     }
 
+    public static bool IsSortAscending { get; set; } = true;
+
     /// <summary>
     /// Reads one directory level (folders then files), stopping the instant MaxItemsPerLevel is
     /// reached. Because the underlying enumeration is lazy and we break out immediately, this is
@@ -78,7 +80,12 @@ public static class FileSystemService
         result.Entries.Sort((a, b) =>
         {
             if (a.IsDirectory != b.IsDirectory) return a.IsDirectory ? -1 : 1; // folders first
-            return string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase);
+            var nameA = Path.GetFileName(a.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var nameB = Path.GetFileName(b.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(nameA)) nameA = a.Path;
+            if (string.IsNullOrEmpty(nameB)) nameB = b.Path;
+            int comp = NaturalStringComparer.Instance.Compare(nameA, nameB);
+            return IsSortAscending ? comp : -comp;
         });
 
         return result;
@@ -158,7 +165,15 @@ public static class FileSystemService
         catch (IOException) { }
         catch (SecurityException) { }
 
-        scan.Entries.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+        scan.Entries.Sort((a, b) =>
+        {
+            var nameA = Path.GetFileName(a.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var nameB = Path.GetFileName(b.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(nameA)) nameA = a.Path;
+            if (string.IsNullOrEmpty(nameB)) nameB = b.Path;
+            int comp = NaturalStringComparer.Instance.Compare(nameA, nameB);
+            return IsSortAscending ? comp : -comp;
+        });
         return (scan.Entries.Select(e => e.Path).ToList(), scan.Truncated);
     }
 

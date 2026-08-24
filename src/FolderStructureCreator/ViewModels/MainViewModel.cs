@@ -139,6 +139,24 @@ public class MainViewModel : ViewModelBase
     /// <summary>Only smaller windows need a way to let the chart temporarily use the sidebar's space.</summary>
     public bool ShouldShowDestinationSidebarToggle => IsOrgChartView && !_isWideWindow;
 
+    private bool _isSortAscending = true;
+    /// <summary>Toggles sorting order between Ascending (A-Z, 1..10) and Descending (Z-A, 10..1).</summary>
+    public bool IsSortAscending
+    {
+        get => _isSortAscending;
+        set
+        {
+            if (SetField(ref _isSortAscending, value))
+            {
+                FileSystemService.IsSortAscending = value;
+                OnPropertyChanged(nameof(SortToggleText));
+                ApplySortOrder();
+            }
+        }
+    }
+
+    public string SortToggleText => IsSortAscending ? "Sort: A-Z ⬇" : "Sort: Z-A ⬆";
+
     /// <summary>Called by the window when it is first shown and whenever it is resized.</summary>
     public void UpdateWindowWidth(double width)
     {
@@ -245,6 +263,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand UnpinFolderCommand { get; }
     public RelayCommand ShowPinnedFolderChartCommand { get; }
     public RelayCommand SelectPinnedFolderCommand { get; }
+    public RelayCommand ToggleSortOrderCommand { get; }
 
     public MainViewModel()
     {
@@ -288,6 +307,7 @@ public class MainViewModel : ViewModelBase
         UnpinFolderCommand = new RelayCommand(param => UnpinFolder(param as PinnedFolder ?? PinnedFolders.FirstOrDefault(p => p.Path == (param as string))));
         ShowPinnedFolderChartCommand = new RelayCommand(async param => await ShowFolderOrgChartFromPathAsync(param as string ?? (param as PinnedFolder)?.Path));
         SelectPinnedFolderCommand = new RelayCommand(param => SelectPinnedFolder(param as PinnedFolder ?? (param is string s ? new PinnedFolder(s) : null)));
+        ToggleSortOrderCommand = new RelayCommand(_ => IsSortAscending = !IsSortAscending);
 
         LoadDrives();
         LoadPinnedFolders();
@@ -302,19 +322,51 @@ public class MainViewModel : ViewModelBase
         };
     }
 
+    private void ApplySortOrder()
+    {
+        SortPinnedFolders();
+        foreach (var drive in Drives)
+            drive.RefreshRecursive();
+    }
+
     private void LoadDrives()
     {
         Drives.Clear();
-        foreach (var drivePath in FileSystemService.GetDrives())
+        var drives = FileSystemService.GetDrives().ToList();
+        drives.Sort((a, b) =>
+        {
+            int comp = NaturalStringComparer.Instance.Compare(a, b);
+            return IsSortAscending ? comp : -comp;
+        });
+        foreach (var drivePath in drives)
             Drives.Add(new FileSystemNode(drivePath, drivePath));
     }
 
     private void LoadPinnedFolders()
     {
         PinnedFolders.Clear();
-        foreach (var pinned in PinnedFoldersService.LoadPinnedFolders())
+        var loaded = PinnedFoldersService.LoadPinnedFolders();
+        loaded.Sort((a, b) =>
+        {
+            int comp = NaturalStringComparer.Instance.Compare(a.Name, b.Name);
+            return IsSortAscending ? comp : -comp;
+        });
+        foreach (var pinned in loaded)
             PinnedFolders.Add(pinned);
         OnPropertyChanged(nameof(HasPinnedFolders));
+    }
+
+    private void SortPinnedFolders()
+    {
+        var list = PinnedFolders.ToList();
+        list.Sort((a, b) =>
+        {
+            int comp = NaturalStringComparer.Instance.Compare(a.Name, b.Name);
+            return IsSortAscending ? comp : -comp;
+        });
+        PinnedFolders.Clear();
+        foreach (var item in list)
+            PinnedFolders.Add(item);
     }
 
     public void PinFolder(string? path)
@@ -335,6 +387,7 @@ public class MainViewModel : ViewModelBase
 
         var pinned = new PinnedFolder(path);
         PinnedFolders.Add(pinned);
+        SortPinnedFolders();
         PinnedFoldersService.SavePinnedFolders(PinnedFolders);
         OnPropertyChanged(nameof(HasPinnedFolders));
         StatusMessage = $"Pinned folder \"{pinned.Name}\" to the left panel.";

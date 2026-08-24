@@ -76,6 +76,18 @@ public class FileSystemNode : INotifyPropertyChanged
             EnsureChildrenLoaded();
     }
 
+    /// <summary>Forces a fresh re-scan of this node and all currently expanded sub-nodes.</summary>
+    public void RefreshRecursive()
+    {
+        if (!_childrenLoaded) return;
+        _childrenLoaded = false;
+        EnsureChildrenLoaded();
+        foreach (var child in Children.Where(c => !c.IsPlaceholder).ToList())
+        {
+            child.RefreshRecursive();
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

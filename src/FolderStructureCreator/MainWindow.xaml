@@ -57,6 +57,7 @@
                         <DockPanel LastChildFill="False" Margin="0,0,0,4">
                             <TextBlock Text="💻 Real Computer Drives" Style="{StaticResource SectionHeader}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,8,4"/>
                             <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Content="{Binding SortToggleText}" Style="{StaticResource ToolButton}" Command="{Binding ToggleSortOrderCommand}" ToolTip="Toggle folder sort order (Ascending / Descending)" Margin="0,0,4,4"/>
                                 <Button Content="📌 Pin" Style="{StaticResource ToolButton}" Command="{Binding PinSelectedFolderCommand}" ToolTip="Pin selected folder for easy chart view access" Margin="0,0,4,4"/>
                                 <Button Content="Use as plan" Style="{StaticResource ToolButton}" Command="{Binding ShowSelectedFolderOrgChartCommand}" ToolTip="Copy the selected folder's hierarchy into the plan" Margin="0,0,4,4"/>
                                 <Button Content="Refresh" Style="{StaticResource ToolButton}" Command="{Binding RefreshDrivesCommand}" ToolTip="Refresh available drives" Margin="0,0,0,4"/>
