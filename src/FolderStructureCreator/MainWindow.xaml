@@ -5,7 +5,12 @@
         xmlns:conv="clr-namespace:FolderStructureCreator.Converters"
         xmlns:views="clr-namespace:FolderStructureCreator.Views"
         Title="Folder Structure Creator" Height="720" Width="1180" MinHeight="560" MinWidth="900"
-        WindowStartupLocation="CenterScreen" Icon="AppIcon.ico">
+        WindowStartupLocation="CenterScreen" Icon="AppIcon.ico"
+        Background="{StaticResource BrushBg}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <conv:BoolToGridLengthConverter x:Key="BoolToGridLength"/>
@@ -19,7 +24,7 @@
         <Grid Grid.Row="0" Margin="2,0,2,14">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="Folder Structure Creator" FontSize="20" FontWeight="Bold"/>
+                <TextBlock Text="Folder Structure Creator" FontSize="20" FontWeight="Bold" Foreground="{StaticResource BrushTextPrimary}"/>
                 <TextBlock Text="Design a reusable folder plan, then create it in a target destination." Style="{StaticResource SubText}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -82,8 +87,8 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="📁 " FontSize="11"/>
-                                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="11.5" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="📂 " FontSize="12" Foreground="#F59E0B"/>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="11.5" Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                         <Button Content="📊 Chart" Style="{StaticResource ToolButton}" Padding="5,2" FontSize="10.5" Command="{Binding DataContext.ShowPinnedFolderChartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Open chart view for this pinned folder"/>
@@ -116,7 +121,14 @@
                                 </Setter>
                             </Style>
                         </TreeView.ItemContainerStyle>
-                        <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}"><TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/></HierarchicalDataTemplate></TreeView.ItemTemplate>
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
                     </TreeView>
                 </DockPanel>
             </Border>
@@ -132,14 +144,19 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <CheckBox Content="Live computer sync" IsChecked="{Binding IsLiveSyncMode}" ToolTip="When checked, adding, renaming, deleting (Recycle Bin), and drag &amp; drop moving directly updates physical folders on disk." VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <Button Content="Tree" Command="{Binding ShowTreeViewCommand}" ToolTip="Editable indented list view"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="False"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-                                <Button Content="Chart" Command="{Binding ShowOrgChartViewCommand}" ToolTip="Visual folder diagram"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="True"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                                <Button Content="Tree" Command="{Binding ShowTreeViewCommand}" ToolTip="Editable indented list view"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="False"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="#0F172A"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                                <Button Content="Chart" Command="{Binding ShowOrgChartViewCommand}" ToolTip="Visual folder diagram"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="True"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="#0F172A"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
                             </StackPanel>
                         </Grid>
                         <WrapPanel Margin="0,10,0,0">
-                            <Button Content="Add root" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/><Button Content="Clear" Style="{StaticResource ToolButton}" Command="{Binding ClearPlanCommand}"/>
+                            <Button Content="+ Add root" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushAccent}" Foreground="{StaticResource BrushAccent}" FontWeight="SemiBold"/>
+                            <Button Content="📥 Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/>
+                            <Button Content="Clear" Style="{StaticResource ToolButton}" Command="{Binding ClearPlanCommand}"/>
                             <Separator Width="1" Height="22" Background="{StaticResource BrushBorder}" Margin="5,0,10,0" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
-                            <Button Content="Add child" Style="{StaticResource ToolButton}" Command="{Binding AddChildFolderCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/><Button Content="Add sibling" Style="{StaticResource ToolButton}" Command="{Binding AddSiblingFolderCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/><Button Content="Rename" Style="{StaticResource ToolButton}" Command="{Binding StartRenameCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/><Button Content="Delete" Style="{StaticResource DangerButton}" Command="{Binding DeleteNodeCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="➕ Add child" Style="{StaticResource ToolButton}" Command="{Binding AddChildFolderCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="➕ Add sibling" Style="{StaticResource ToolButton}" Command="{Binding AddSiblingFolderCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="✏️ Rename" Style="{StaticResource ToolButton}" Command="{Binding StartRenameCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="🗑️ Delete" Style="{StaticResource DangerButton}" Command="{Binding DeleteNodeCommand}" Visibility="{Binding HasSelectedStructureNode, Converter={StaticResource BoolToVis}}"/>
                         </WrapPanel>
                         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding QuickAddNames, UpdateSourceTrigger=PropertyChanged}" Tag="Add names: src, docs, tests" ToolTip="Comma-separated names; added under the selected folder"><TextBox.InputBindings><KeyBinding Key="Enter" Command="{Binding QuickAddCommand}"/></TextBox.InputBindings></TextBox><Button Grid.Column="1" Content="Add" Style="{StaticResource ToolButton}" Margin="8,0,0,0" Command="{Binding QuickAddCommand}" Visibility="{Binding HasQuickAddText, Converter={StaticResource BoolToVis}}"/></Grid>
                         <Grid Margin="0,8,0,0">
@@ -192,18 +209,21 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
-                                            <TextBlock Text="{Binding Name}" MouseDown="StructureNodeText_MouseDown">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsMatchingSearch}" Value="True">
-                                                                <Setter Property="FontWeight" Value="Bold"/>
-                                                                <Setter Property="Foreground" Value="#854D0E"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
+                                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource BrushTextPrimary}" MouseDown="StructureNodeText_MouseDown">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsMatchingSearch}" Value="True">
+                                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                                    <Setter Property="Foreground" Value="#854D0E"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
                                         </Border>
                                         <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" Padding="2,1" LostFocus="RenameTextBox_LostFocus" KeyDown="RenameTextBox_KeyDown" Loaded="RenameTextBox_Loaded"/>
                                     </Grid>
@@ -211,29 +231,36 @@
                             </TreeView.ItemTemplate>
                         </TreeView>
                         <views:OrgChartView x:Name="OrgChartHost" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
-                        <Border Background="{StaticResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320"><TextBlock Text="Start a folder plan" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="Add a root folder to build it by hand, or import an existing folder as a starting point." Style="{StaticResource SubText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="Add root" Style="{StaticResource PrimaryButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/></StackPanel></StackPanel></Border>
+                        <Border Background="{StaticResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320"><TextBlock Text="Start a folder plan" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource BrushTextPrimary}" HorizontalAlignment="Center"/><TextBlock Text="Add a root folder to build it by hand, or import an existing folder as a starting point." Style="{StaticResource SubText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="Add root" Style="{StaticResource PrimaryButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/></StackPanel></StackPanel></Border>
                     </Grid>
                 </DockPanel>
             </Border>
         </Grid>
 
         <!-- Destination, status, and final action remain together throughout the workflow. -->
-        <Border Grid.Row="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,0">
+        <Border Grid.Row="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,12,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="2*"/>
-                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,14,0">
-                    <TextBlock Text="🎯 DESTINATION PATH" Style="{StaticResource SubText}" FontWeight="SemiBold" Margin="2,0,0,4"/>
-                    <TextBox Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" Tag="Select a folder on left or enter destination path..." FontFamily="Consolas" ToolTip="Select a folder above or enter a valid path"/>
-                </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Style="{StaticResource SubText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="Create every folder in the plan under this destination" VerticalAlignment="Center" Padding="16,8">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🚀 " FontSize="12.5"/>
-                        <TextBlock Text="Create structure" FontSize="12.5" FontWeight="SemiBold"/>
+                <Grid Grid.Column="0" Margin="0,0,16,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="🎯 DESTINATION PATH" Style="{StaticResource SubText}" FontWeight="SemiBold" Margin="2,0,0,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding StatusMessage}" Style="{StaticResource SubText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="10,0,0,4"/>
+                    <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged}" Tag="Select a folder on left or enter destination path..." FontFamily="Consolas" ToolTip="Select a folder above or enter a valid path"/>
+                </Grid>
+                <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="Create every folder in the plan under this destination" VerticalAlignment="Center" Padding="22,11" MinWidth="180">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="🚀 " FontSize="13.5"/>
+                        <TextBlock Text="Create structure" FontSize="13.5" FontWeight="Bold"/>
                     </StackPanel>
                 </Button>
             </Grid>
