@@ -28,10 +28,26 @@ Right-clicking any folder node (in either Tree View or Org Chart View) provides 
 
 ### 👁️ Two Blueprint Views
 - **Tree View** — Classic, clean indented list view with expandable/collapsible tree nodes.
-- **Org Chart Diagram** — A horizontal dendrogram diagram with depth-colored boxes and right-angle connector lines.
+- **Org Chart Diagram** — Interactive dendrogram diagram with depth-colored boxes and right-angle connector lines.
+  - **Layout Direction Toggle** — Dynamically switch diagram orientation between **Horizontal (Left-to-Right ➡️)** and **Vertical (Top-to-Bottom ⬇️)** dendrogram views via the toolbar toggle button.
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
   - **Drag & Drop Moving** — Drag any box and drop it onto another node to instantly move/re-parent it in the tree structure.
   - **Double-Click to Rename** — Double-click any box on the diagram canvas to rename it inline.
+
+### ⚡ Command Line (CLI) & Direct Folder-to-Folder Copy
+- **Direct Folder Replication** — Replicate any existing directory's folder hierarchy directly to a target destination from terminal/PowerShell without launching the GUI.
+- **Dry-Run Preview** — Preview all nested folder paths that would be created before writing anything to disk.
+- **CLI Options & Syntax**:
+  ```cmd
+  FolderStructureCreator.exe --source <source_folder> --target <target_folder> [options]
+  ```
+  | Flag | Option | Description |
+  | :--- | :--- | :--- |
+  | `-src`, `--source` | `<path>` | Source reference folder to copy structure from. |
+  | `-dst`, `--target` | `<path>` | Destination target folder where structure will be created. |
+  | `--dry-run` | None | Preview folder creation simulation without disk writes. |
+  | `--silent`, `-s` | None | Run headlessly without opening the GUI window. |
+  | `-h`, `--help` | None | Display CLI help documentation. |
 
 ### 🔍 Advanced Search & Highlight
 - **Real-Time Search Bar** — Search across all folders in your blueprint plan (`Ctrl + F` shortcut).
@@ -75,7 +91,7 @@ src/FolderStructureCreator/
   ViewModels/
     MainViewModel.cs              Core MVVM ViewModel (commands, search, live sync, selection, navigation)
     RelayCommand.cs / ViewModelBase.cs  Base MVVM primitives
-  Converters/                     XAML visibility, brush, and grid length converters
+  Converters/                     XAML visibility, brush, layout direction, and grid length converters
 installer/
   FolderStructureCreator.iss      Inno Setup installer script
   build-installer.ps1             PowerShell build & package script
