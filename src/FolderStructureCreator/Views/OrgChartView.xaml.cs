@@ -53,8 +53,8 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised when an inline rename is committed, passing the node and requested new name.</summary>
     public event Action<FolderNode, string>? NodeRenamed;
 
-    /// <summary>Raised when a node box is dragged and dropped onto another node box (moving/re-parenting).</summary>
-    public event Action<FolderNode, FolderNode>? NodeMoved;
+    /// <summary>Raised when a node box is dragged and dropped onto another node box (moving/re-parenting) or onto empty canvas (null target, moving to root).</summary>
+    public event Action<FolderNode, FolderNode?>? NodeMoved;
 
     /// <summary>Raised when Open in Explorer is clicked in the node context menu.</summary>
     public event Action<FolderNode>? OpenInExplorerRequested;
@@ -103,6 +103,8 @@ public partial class OrgChartView : UserControl
     private bool _isDragging;
     private FolderNode? _dragTargetNode;
     private Border? _dragTargetBox;
+    private Border? _dragGhostBorder;
+    private bool _isHoveringRootDropZone;
 
     // Expanded zoom limits (10% to 400%)
     private const double MinZoom = 0.1;
@@ -147,6 +149,22 @@ public partial class OrgChartView : UserControl
         ChartScrollViewer.PreviewMouseMove += ChartScrollViewer_PreviewMouseMove;
         ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
         ChartScrollViewer.ScrollChanged += (_, _) => UpdateMiniMapViewport();
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        if (e.Key == Key.Escape && _isDragging)
+        {
+            _isDragging = false;
+            _draggedNode = null;
+            _dragTargetNode = null;
+            _isHoveringRootDropZone = false;
+            ClearDragTargetHighlight();
+            if (_dragGhostBorder != null) _dragGhostBorder.Visibility = Visibility.Collapsed;
+            RootDropBanner.Visibility = Visibility.Collapsed;
+            e.Handled = true;
+        }
     }
 
     private void ChartScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -548,6 +566,7 @@ public partial class OrgChartView : UserControl
                 {
                     _isDragging = true;
                     box.CaptureMouse();
+                    EnsureDragGhostCreated();
                 }
 
                 if (_isDragging)
@@ -561,21 +580,39 @@ public partial class OrgChartView : UserControl
                 if (box.IsMouseCaptured)
                     box.ReleaseMouseCapture();
 
-                if (_isDragging && _draggedNode != null && _dragTargetNode != null)
+                if (_dragGhostBorder != null)
+                    _dragGhostBorder.Visibility = Visibility.Collapsed;
+
+                RootDropBanner.Visibility = Visibility.Collapsed;
+
+                if (_isDragging && _draggedNode != null)
                 {
                     var source = _draggedNode;
                     var target = _dragTargetNode;
+                    bool wasRootHover = _isHoveringRootDropZone;
+
                     _draggedNode = null;
                     _isDragging = false;
+                    _isHoveringRootDropZone = false;
                     ClearDragTargetHighlight();
 
-                    NodeMoved?.Invoke(source, target);
+                    if (target != null)
+                    {
+                        NodeMoved?.Invoke(source, target);
+                    }
+                    else if (wasRootHover)
+                    {
+                        NodeMoved?.Invoke(source, null); // Dropped explicitly onto Root Drop Banner
+                    }
+                    // Else: dropped on empty canvas space -> drag is safely CANCELLED (node remains unchanged)
+
                     e.Handled = true;
                     return;
                 }
 
                 _draggedNode = null;
                 _isDragging = false;
+                _isHoveringRootDropZone = false;
                 ClearDragTargetHighlight();
             };
 
@@ -605,6 +642,17 @@ public partial class OrgChartView : UserControl
                 NodeClicked?.Invoke(node);
                 AddSiblingRequested?.Invoke(node);
             };
+
+            MenuItem? moveToRootItem = null;
+            if (node.Parent != null)
+            {
+                moveToRootItem = new MenuItem { Header = "Move to Root" };
+                moveToRootItem.Click += (_, _) =>
+                {
+                    NodeClicked?.Invoke(node);
+                    NodeMoved?.Invoke(node, null);
+                };
+            }
 
             var renameItem = new MenuItem { Header = "Rename" };
             renameItem.Click += (_, _) =>
@@ -636,6 +684,10 @@ public partial class OrgChartView : UserControl
             menu.Items.Add(new Separator());
             menu.Items.Add(addChildItem);
             menu.Items.Add(addSiblingItem);
+            if (moveToRootItem != null)
+            {
+                menu.Items.Add(moveToRootItem);
+            }
             menu.Items.Add(new Separator());
             menu.Items.Add(renameItem);
             menu.Items.Add(deleteItem);
@@ -653,26 +705,113 @@ public partial class OrgChartView : UserControl
         UpdateMiniMapViewport();
     }
 
+    private void EnsureDragGhostCreated()
+    {
+        if (_draggedNode == null) return;
+
+        if (_dragGhostBorder == null)
+        {
+            _dragGhostBorder = new Border
+            {
+                Width = BoxWidth,
+                Height = BoxHeight,
+                Background = new SolidColorBrush(Color.FromArgb(0xD8, 0xE2, 0xE8, 0xF0)),
+                BorderBrush = DragHoverBrush,
+                BorderThickness = new Thickness(2),
+                CornerRadius = new CornerRadius(6),
+                IsHitTestVisible = false,
+                Opacity = 0.85,
+                Child = new TextBlock
+                {
+                    Text = _draggedNode.Name,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.Black,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextAlignment = TextAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(6, 0, 6, 0)
+                }
+            };
+            Canvas.SetZIndex(_dragGhostBorder, 9999);
+        }
+        else
+        {
+            if (_dragGhostBorder.Child is TextBlock tb)
+                tb.Text = _draggedNode.Name;
+        }
+
+        if (!RootCanvas.Children.Contains(_dragGhostBorder))
+            RootCanvas.Children.Add(_dragGhostBorder);
+
+        _dragGhostBorder.Visibility = Visibility.Visible;
+
+        // Show top banner to drop to root only if the node actually has a parent (i.e. is not already a root folder)
+        if (_draggedNode.Parent != null)
+        {
+            RootDropBanner.Visibility = Visibility.Visible;
+        }
+    }
+
     private void UpdateDragHoverTarget(Point canvasPos)
     {
+        if (_dragGhostBorder != null && _dragGhostBorder.Visibility == Visibility.Visible)
+        {
+            Canvas.SetLeft(_dragGhostBorder, canvasPos.X + 12);
+            Canvas.SetTop(_dragGhostBorder, canvasPos.Y + 12);
+        }
+
+        // Check if cursor is over the top RootDropBanner
+        if (RootDropBanner.Visibility == Visibility.Visible)
+        {
+            Point gridPos = Mouse.GetPosition(MainGrid);
+            double bannerLeft = (MainGrid.ActualWidth / 2.0) - 180;
+            double bannerRight = (MainGrid.ActualWidth / 2.0) + 180;
+            _isHoveringRootDropZone = (gridPos.Y >= 0 && gridPos.Y <= 75 && gridPos.X >= bannerLeft && gridPos.X <= bannerRight);
+
+            if (_isHoveringRootDropZone)
+            {
+                RootDropBanner.Background = new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+                RootDropBanner.BorderBrush = Brushes.White;
+                RootDropBanner.BorderThickness = new Thickness(2.5);
+            }
+            else
+            {
+                RootDropBanner.Background = new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E));
+                RootDropBanner.BorderBrush = new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+                RootDropBanner.BorderThickness = new Thickness(1.5);
+            }
+        }
+        else
+        {
+            _isHoveringRootDropZone = false;
+        }
+
         FolderNode? hitNode = null;
         Border? hitBox = null;
 
-        foreach (var (box, node) in _boxMap)
+        // VisualTreeHelper.HitTest for fast O(1) hit testing of diagram boxes
+        VisualTreeHelper.HitTest(RootCanvas, null, result =>
         {
-            if (ReferenceEquals(node, _draggedNode)) continue;
-
-            double left = Canvas.GetLeft(box);
-            double top = Canvas.GetTop(box);
-
-            if (canvasPos.X >= left && canvasPos.X <= left + BoxWidth &&
-                canvasPos.Y >= top && canvasPos.Y <= top + BoxHeight)
+            if (result.VisualHit is DependencyObject hitObj)
             {
-                hitNode = node;
-                hitBox = box;
-                break;
+                DependencyObject? curr = hitObj;
+                while (curr != null && curr != RootCanvas)
+                {
+                    if (curr is Border b && _boxMap.TryGetValue(b, out var node))
+                    {
+                        if (!ReferenceEquals(node, _draggedNode))
+                        {
+                            hitBox = b;
+                            hitNode = node;
+                            return HitTestResultBehavior.Stop;
+                        }
+                    }
+                    curr = VisualTreeHelper.GetParent(curr);
+                }
             }
-        }
+            return HitTestResultBehavior.Continue;
+        }, new PointHitTestParameters(canvasPos));
 
         if (ReferenceEquals(_dragTargetBox, hitBox)) return;
 

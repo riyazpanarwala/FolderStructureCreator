@@ -268,6 +268,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand AddSiblingFolderCommand { get; }
     public RelayCommand QuickAddCommand { get; }
     public RelayCommand DeleteNodeCommand { get; }
+    public RelayCommand MoveToRootCommand { get; }
     public RelayCommand RefreshDrivesCommand { get; }
     public RelayCommand ShowSelectedFolderOrgChartCommand { get; }
     public RelayCommand CreateStructureCommand { get; }
@@ -299,6 +300,7 @@ public class MainViewModel : ViewModelBase
         AddSiblingFolderCommand = new RelayCommand(_ => AddSibling(), _ => SelectedStructureNode != null);
         QuickAddCommand = new RelayCommand(_ => QuickAdd(), _ => !string.IsNullOrWhiteSpace(QuickAddNames));
         DeleteNodeCommand = new RelayCommand(_ => DeleteSelected(), _ => SelectedStructureNode != null);
+        MoveToRootCommand = new RelayCommand(_ => MoveNodeToRoot(SelectedStructureNode!), _ => SelectedStructureNode?.Parent != null);
         RefreshDrivesCommand = new RelayCommand(_ => LoadDrives());
         ShowSelectedFolderOrgChartCommand = new RelayCommand(_ => ShowSelectedFolderOrgChart(), _ => SelectedTargetNode is { IsPlaceholder: false });
         CreateStructureCommand = new RelayCommand(_ => CreateStructure(), _ => CanCreateStructure());
@@ -828,6 +830,43 @@ public class MainViewModel : ViewModelBase
         RaiseStructureChanged();
     }
 
+    /// <summary>Moves sourceNode to the top level (RootFolders), performing physical disk move when Live Computer Sync is enabled.</summary>
+    public void MoveNodeToRoot(FolderNode sourceNode)
+    {
+        if (sourceNode == null) return;
+        if (sourceNode.Parent == null) return; // Already a root folder
+
+        if (IsLiveSyncMode && TargetPathExists && !string.IsNullOrEmpty(sourceNode.RealPath))
+        {
+            var targetRootPath = TargetPath;
+            var result = FileSystemService.MoveFolderOnDisk(sourceNode.RealPath, targetRootPath);
+            if (!result.Success)
+            {
+                StatusMessage = $"Could not move folder to root on computer disk: {result.Error}";
+                MessageBox.Show($"Could not move folder to root on computer disk:\n{result.Error}", "Move Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            sourceNode.Parent.Children.Remove(sourceNode);
+            sourceNode.Parent = null;
+            RootFolders.Add(sourceNode);
+            sourceNode.UpdateRealPaths(result.NewPath);
+
+            StatusMessage = $"Moved folder to root on computer disk: \"{result.NewPath}\"";
+            SelectedTargetNode?.Refresh();
+        }
+        else
+        {
+            sourceNode.Parent.Children.Remove(sourceNode);
+            sourceNode.Parent = null;
+            RootFolders.Add(sourceNode);
+        }
+
+        SelectedStructureNode = sourceNode;
+        OnPropertyChanged(nameof(TotalFolderCount));
+        RaiseStructureChanged();
+    }
+
     public void OpenInExplorer(FolderNode? node)
     {
         node ??= SelectedStructureNode;
@@ -990,6 +1029,35 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             StatusMessage = $"Could not read reference folder: {ex.Message}";
+        }
+
+        OnPropertyChanged(nameof(TotalFolderCount));
+        RaiseStructureChanged();
+    }
+
+    /// <summary>Imports a folder hierarchy from disk by path into the current blueprint plan (e.g. via drag and drop from Explorer).</summary>
+    public async Task ImportFolderFromPathAsync(string folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return;
+
+        StatusMessage = $"Reading \"{Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar))}\"…";
+
+        try
+        {
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath));
+            RootFolders.Add(importResult.Root);
+            SelectedStructureNode = importResult.Root;
+
+            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s).";
+            if (importResult.Truncated)
+            {
+                message += $" Note: very large folder, import capped at safety limit (~{FileSystemService.MaxImportTotalNodes} folders).";
+            }
+            StatusMessage = message;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusMessage = $"Could not read imported folder: {ex.Message}";
         }
 
         OnPropertyChanged(nameof(TotalFolderCount));

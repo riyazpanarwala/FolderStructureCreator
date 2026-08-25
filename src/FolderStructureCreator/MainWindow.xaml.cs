@@ -1,7 +1,10 @@
 using System.ComponentModel;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FolderStructureCreator.Models;
 using FolderStructureCreator.ViewModels;
 
@@ -19,7 +22,7 @@ public partial class MainWindow : Window
         ViewModel.StructureChanged += RefreshOrgChartIfVisible;
         OrgChartHost.NodeClicked += node => ViewModel.SelectedStructureNode = node;
         OrgChartHost.NodeRenamed += (node, newName) => ViewModel.RenameNode(node, newName);
-        OrgChartHost.NodeMoved += (source, target) => ViewModel.MoveNode(source, target);
+        OrgChartHost.NodeMoved += (source, target) => { if (target == null) ViewModel.MoveNodeToRoot(source); else ViewModel.MoveNode(source, target); };
         OrgChartHost.OpenInExplorerRequested += node => ViewModel.OpenInExplorerCommand.Execute(node);
         OrgChartHost.AddChildRequested += node => ViewModel.AddChildFolderCommand.Execute(null);
         OrgChartHost.AddSiblingRequested += node => ViewModel.AddSiblingFolderCommand.Execute(null);
@@ -205,4 +208,113 @@ public partial class MainWindow : Window
     private void ZoomOutOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomOut();
     private void ResetZoomOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ResetZoom();
     private void FitOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToView();
+
+    private Point _treeViewDragStartPoint;
+    private FolderNode? _treeViewDraggedNode;
+
+    private void StructureTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _treeViewDragStartPoint = e.GetPosition(null);
+        _treeViewDraggedNode = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource)?.DataContext as FolderNode;
+    }
+
+    private void StructureTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _treeViewDraggedNode == null) return;
+
+        Point currentPos = e.GetPosition(null);
+        Vector diff = _treeViewDragStartPoint - currentPos;
+
+        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            DataObject data = new DataObject("FolderNode", _treeViewDraggedNode);
+            DragDrop.DoDragDrop(StructureTreeView, data, DragDropEffects.Move);
+            _treeViewDraggedNode = null;
+        }
+    }
+
+    private void StructureTreeView_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("FolderNode"))
+        {
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+        else if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private async void StructureTreeView_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("FolderNode"))
+        {
+            var draggedNode = e.Data.GetData("FolderNode") as FolderNode;
+            if (draggedNode != null)
+            {
+                var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
+                var targetNode = targetItem?.DataContext as FolderNode;
+
+                if (targetNode != null)
+                {
+                    ViewModel.MoveNode(draggedNode, targetNode);
+                }
+                else
+                {
+                    ViewModel.MoveNodeToRoot(draggedNode);
+                }
+            }
+            e.Handled = true;
+        }
+        else if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            await HandleExternalFileDrop(e);
+            e.Handled = true;
+        }
+    }
+
+    private void Window_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private async void Window_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            await HandleExternalFileDrop(e);
+            e.Handled = true;
+        }
+    }
+
+    private async Task HandleExternalFileDrop(DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
+        {
+            foreach (var file in files)
+            {
+                if (Directory.Exists(file))
+                {
+                    await ViewModel.ImportFolderFromPathAsync(file);
+                }
+            }
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current != null)
+        {
+            if (current is T ancestor) return ancestor;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
 }

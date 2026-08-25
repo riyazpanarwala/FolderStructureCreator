@@ -10,7 +10,10 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType">
+        TextOptions.TextRenderingMode="ClearType"
+        AllowDrop="True"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop">
     <Window.Resources>
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <conv:BoolToGridLengthConverter x:Key="BoolToGridLength"/>
@@ -232,7 +235,7 @@
                     </StackPanel>
 
                     <Grid>
-                        <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}" SelectedItemChanged="StructureTreeView_SelectedItemChanged" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
+                        <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}" SelectedItemChanged="StructureTreeView_SelectedItemChanged" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}" AllowDrop="True" PreviewMouseLeftButtonDown="StructureTreeView_PreviewMouseLeftButtonDown" PreviewMouseMove="StructureTreeView_PreviewMouseMove" DragOver="StructureTreeView_DragOver" Drop="StructureTreeView_Drop">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -247,6 +250,7 @@
                                                 <Separator/>
                                                 <MenuItem Header="Add child" Command="{Binding AddChildFolderCommand}"/>
                                                 <MenuItem Header="Add sibling" Command="{Binding AddSiblingFolderCommand}"/>
+                                                <MenuItem Header="Move to Root" Command="{Binding MoveToRootCommand}"/>
                                                 <Separator/>
                                                 <MenuItem Header="Rename" Command="{Binding StartRenameCommand}"/>
                                                 <MenuItem Header="Delete" Command="{Binding DeleteNodeCommand}" Foreground="{StaticResource BrushDanger}"/>

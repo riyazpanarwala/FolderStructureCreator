@@ -10,6 +10,18 @@
             </Canvas>
         </ScrollViewer>
 
+        <!-- Root Drop Target Overlay Banner (Shown only during Drag) -->
+        <Border x:Name="RootDropBanner" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16"
+                Background="#0F766E" BorderBrush="#0D9488" BorderThickness="1.5" CornerRadius="8"
+                Padding="16,8" Visibility="Collapsed" Panel.ZIndex="1000">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.4" Color="#000000"/>
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="🎯 Drop here to move folder to Root level" FontSize="12.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
         <!-- Mini-Map Overlay Box (Bottom-Right Corner) -->
         <Border x:Name="MiniMapBorder" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16"
                 Background="#0F172A" BorderBrush="#334155" BorderThickness="1.5" CornerRadius="8"
