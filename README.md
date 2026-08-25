@@ -30,6 +30,7 @@ Right-clicking any folder node (in either Tree View or Org Chart View) provides 
 - **Tree View** — Classic, clean indented list view with expandable/collapsible tree nodes.
 - **Org Chart Diagram** — Interactive dendrogram diagram with depth-colored boxes and right-angle connector lines.
   - **Layout Direction Toggle** — Dynamically switch diagram orientation between **Horizontal (Left-to-Right ➡️)** and **Vertical (Top-to-Bottom ⬇️)** dendrogram views via the toolbar toggle button.
+  - **Mini-Map Navigation Overlay** — A bird's-eye thumbnail preview box in the bottom-right corner with a live blue viewfinder box. Click or drag anywhere on the mini-map to instantly pan the main diagram. Toggle via `🗺️ Map` on the toolbar.
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
   - **Drag & Drop Moving** — Drag any box and drop it onto another node to instantly move/re-parent it in the tree structure.
   - **Double-Click to Rename** — Double-click any box on the diagram canvas to rename it inline.

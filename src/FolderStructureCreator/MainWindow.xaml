@@ -219,6 +219,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Double-click to rename. Drag &amp; drop box to move. Drag canvas or middle-click to pan." Style="{StaticResource SubText}" VerticalAlignment="Center"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="🗺️ Map" Style="{StaticResource ToolButton}" Command="{Binding ToggleMiniMapCommand}" ToolTip="Toggle Mini-Map navigation overlay" Margin="0,0,4,0"/>
                                     <Button Content="{Binding OrgChartLayoutButtonText}" Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle Org Chart layout direction (Horizontal ➡️ / Vertical ⬇️)" Margin="0,0,4,0"/>
                                     <Button Content="Toggle destination" Style="{StaticResource ToolButton}" Command="{Binding ToggleDestinationSidebarCommand}" ToolTip="Collapse or restore the destination sidebar" Visibility="{Binding ShouldShowDestinationSidebarToggle, Converter={StaticResource BoolToVis}}"/>
                                     <Button Content="−" Style="{StaticResource ToolButton}" Click="ZoomOutOrgChart_Click" ToolTip="Zoom out (Ctrl + -)"/>
@@ -289,7 +290,7 @@
                                 </HierarchicalDataTemplate>
                             </TreeView.ItemTemplate>
                         </TreeView>
-                        <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
+                        <views:OrgChartView x:Name="OrgChartHost" IsMiniMapVisible="{Binding IsMiniMapVisible}" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
                         <Border Background="{StaticResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320"><TextBlock Text="Start a folder plan" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource BrushTextPrimary}" HorizontalAlignment="Center"/><TextBlock Text="Add a root folder to build it by hand, or import an existing folder as a starting point." Style="{StaticResource SubText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="Add root" Style="{StaticResource PrimaryButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/></StackPanel></StackPanel></Border>
                     </Grid>
                 </DockPanel>

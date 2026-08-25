@@ -114,6 +114,30 @@ public partial class OrgChartView : UserControl
     private double _panStartHOffset;
     private double _panStartVOffset;
 
+    public static readonly DependencyProperty IsMiniMapVisibleProperty =
+        DependencyProperty.Register(
+            nameof(IsMiniMapVisible),
+            typeof(bool),
+            typeof(OrgChartView),
+            new FrameworkPropertyMetadata(true, OnIsMiniMapVisibleChanged));
+
+    public bool IsMiniMapVisible
+    {
+        get => (bool)GetValue(IsMiniMapVisibleProperty);
+        set => SetValue(IsMiniMapVisibleProperty, value);
+    }
+
+    private static void OnIsMiniMapVisibleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is OrgChartView chart)
+        {
+            chart.MiniMapBorder.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
+            chart.UpdateMiniMapViewport();
+        }
+    }
+
+    private bool _isMiniMapDragging;
+
     public OrgChartView()
     {
         InitializeComponent();
@@ -122,6 +146,7 @@ public partial class OrgChartView : UserControl
         ChartScrollViewer.PreviewMouseDown += ChartScrollViewer_PreviewMouseDown;
         ChartScrollViewer.PreviewMouseMove += ChartScrollViewer_PreviewMouseMove;
         ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
+        ChartScrollViewer.ScrollChanged += (_, _) => UpdateMiniMapViewport();
     }
 
     private void ChartScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -624,6 +649,8 @@ public partial class OrgChartView : UserControl
                 BeginRename(node, box);
             }
         }
+
+        UpdateMiniMapViewport();
     }
 
     private void UpdateDragHoverTarget(Point canvasPos)
@@ -722,5 +749,115 @@ public partial class OrgChartView : UserControl
     }
 
     private static (Color Fill, Color Border) GetPalette(int depth) => Palette[depth % Palette.Length];
+
+    public void UpdateMiniMapViewport()
+    {
+        if (MiniMapBorder == null || MiniMapViewportRect == null) return;
+        if (MiniMapBorder.Visibility != Visibility.Visible || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
+        {
+            MiniMapViewportRect.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        MiniMapViewportRect.Visibility = Visibility.Visible;
+
+        double canvasW = RootCanvas.Width;
+        double canvasH = RootCanvas.Height;
+        double mapW = 160.0;
+        double mapH = 110.0;
+
+        double scale = Math.Min(mapW / canvasW, mapH / canvasH);
+        double previewW = canvasW * scale;
+        double previewH = canvasH * scale;
+
+        double offsetX = (mapW - previewW) / 2.0;
+        double offsetY = (mapH - previewH) / 2.0;
+
+        double zoom = ChartScale.ScaleX;
+        double viewportW = ChartScrollViewer.ViewportWidth;
+        double viewportH = ChartScrollViewer.ViewportHeight;
+
+        double unscaledLeft = ChartScrollViewer.HorizontalOffset / zoom;
+        double unscaledTop = ChartScrollViewer.VerticalOffset / zoom;
+        double unscaledWidth = viewportW / zoom;
+        double unscaledHeight = viewportH / zoom;
+
+        double rectLeft = offsetX + unscaledLeft * scale;
+        double rectTop = offsetY + unscaledTop * scale;
+        double rectWidth = unscaledWidth * scale;
+        double rectHeight = unscaledHeight * scale;
+
+        rectLeft = Math.Clamp(rectLeft, offsetX, offsetX + previewW);
+        rectTop = Math.Clamp(rectTop, offsetY, offsetY + previewH);
+        rectWidth = Math.Clamp(rectWidth, 8, mapW);
+        rectHeight = Math.Clamp(rectHeight, 8, mapH);
+
+        Canvas.SetLeft(MiniMapViewportRect, rectLeft);
+        Canvas.SetTop(MiniMapViewportRect, rectTop);
+        MiniMapViewportRect.Width = rectWidth;
+        MiniMapViewportRect.Height = rectHeight;
+    }
+
+    private void MiniMapCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _isMiniMapDragging = true;
+        MiniMapCanvas.CaptureMouse();
+        ScrollFromMiniMapPos(e.GetPosition(MiniMapCanvas));
+        e.Handled = true;
+    }
+
+    private void MiniMapCanvas_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isMiniMapDragging)
+        {
+            ScrollFromMiniMapPos(e.GetPosition(MiniMapCanvas));
+            e.Handled = true;
+        }
+    }
+
+    private void MiniMapCanvas_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isMiniMapDragging)
+        {
+            _isMiniMapDragging = false;
+            MiniMapCanvas.ReleaseMouseCapture();
+            e.Handled = true;
+        }
+    }
+
+    private void ScrollFromMiniMapPos(Point mapPos)
+    {
+        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0) return;
+
+        double canvasW = RootCanvas.Width;
+        double canvasH = RootCanvas.Height;
+        double mapW = 160.0;
+        double mapH = 110.0;
+
+        double scale = Math.Min(mapW / canvasW, mapH / canvasH);
+        double previewW = canvasW * scale;
+        double previewH = canvasH * scale;
+
+        double offsetX = (mapW - previewW) / 2.0;
+        double offsetY = (mapH - previewH) / 2.0;
+
+        double clickX = mapPos.X - offsetX;
+        double clickY = mapPos.Y - offsetY;
+
+        double unscaledTargetX = clickX / scale;
+        double unscaledTargetY = clickY / scale;
+
+        double zoom = ChartScale.ScaleX;
+        double targetHOffset = (unscaledTargetX * zoom) - (ChartScrollViewer.ViewportWidth / 2.0);
+        double targetVOffset = (unscaledTargetY * zoom) - (ChartScrollViewer.ViewportHeight / 2.0);
+
+        ChartScrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetHOffset));
+        ChartScrollViewer.ScrollToVerticalOffset(Math.Max(0, targetVOffset));
+    }
+
+    private void CloseMiniMap_Click(object sender, RoutedEventArgs e)
+    {
+        IsMiniMapVisible = false;
+    }
 }
 
