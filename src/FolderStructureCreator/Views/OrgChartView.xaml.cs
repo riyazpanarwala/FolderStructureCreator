@@ -9,14 +9,41 @@ using System.Collections.Generic;
 
 namespace FolderStructureCreator.Views;
 
+public enum OrgChartLayoutDirection
+{
+    Horizontal,
+    Vertical
+}
+
 /// <summary>
-/// A horizontal org-chart / dendrogram style visualization of a folder structure -
-/// colored boxes per depth level, connected by right-angle elbow lines, laid out left to right.
+/// A horizontal or vertical org-chart / dendrogram style visualization of a folder structure -
+/// colored boxes per depth level, connected by right-angle elbow lines, laid out left-to-right or top-to-bottom.
 /// This is a lightweight custom-drawn control (Canvas + code-behind layout) rather than a
 /// TreeView, since WPF has nothing built in for this diagram shape.
 /// </summary>
 public partial class OrgChartView : UserControl
 {
+    public static readonly DependencyProperty LayoutDirectionProperty =
+        DependencyProperty.Register(
+            nameof(LayoutDirection),
+            typeof(OrgChartLayoutDirection),
+            typeof(OrgChartView),
+            new FrameworkPropertyMetadata(OrgChartLayoutDirection.Horizontal, OnLayoutDirectionChanged));
+
+    public OrgChartLayoutDirection LayoutDirection
+    {
+        get => (OrgChartLayoutDirection)GetValue(LayoutDirectionProperty);
+        set => SetValue(LayoutDirectionProperty, value);
+    }
+
+    private static void OnLayoutDirectionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is OrgChartView chart)
+        {
+            chart.RenderInternal();
+        }
+    }
+
     /// <summary>Raised when a node box is single-clicked (used to drive selection in the toolbar).</summary>
     public event Action<FolderNode>? NodeClicked;
 
@@ -49,8 +76,8 @@ public partial class OrgChartView : UserControl
 
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
-    private const double ColumnGap = 56;   // horizontal room for connector routing between columns
-    private const double RowHeight = 46;   // vertical spacing between sibling rows
+    private const double ColumnGap = 56;   // horizontal room for connector routing between columns (Horizontal mode)
+    private const double RowHeight = 46;   // vertical spacing between sibling rows (Horizontal mode)
     private const double ChartPadding = 24;
 
     // Depth-based palette, cycling if the tree goes deeper than the list - loosely matches the
@@ -295,7 +322,7 @@ public partial class OrgChartView : UserControl
         }
 
         // ---- Layout pass: assign every node a fractional "row" via post-order DFS so a parent
-        // ends up vertically centered over its children (classic dendrogram layout). ----
+        // ends up centered over its children (classic dendrogram layout). ----
         double nextRow = 0;
         var positions = new Dictionary<FolderNode, (double Row, int Depth)>();
 
@@ -326,8 +353,53 @@ public partial class OrgChartView : UserControl
             LayoutNode(root, 0);
 
         int maxDepth = positions.Count > 0 ? positions.Values.Max(p => p.Depth) : 0;
-        RootCanvas.Width = Math.Max(ChartPadding * 2 + (maxDepth + 1) * (BoxWidth + ColumnGap), 100);
-        RootCanvas.Height = Math.Max(ChartPadding * 2 + nextRow * RowHeight, 100);
+
+        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
+        const double siblingWidth = BoxWidth + 20; // X spacing per sibling column in vertical mode
+        const double levelHeight = BoxHeight + 46; // Y spacing per depth level in vertical mode
+
+        if (isVertical)
+        {
+            RootCanvas.Width = Math.Max(ChartPadding * 2 + nextRow * siblingWidth, 100);
+            RootCanvas.Height = Math.Max(ChartPadding * 2 + (maxDepth + 1) * levelHeight, 100);
+        }
+        else
+        {
+            RootCanvas.Width = Math.Max(ChartPadding * 2 + (maxDepth + 1) * (BoxWidth + ColumnGap), 100);
+            RootCanvas.Height = Math.Max(ChartPadding * 2 + nextRow * RowHeight, 100);
+        }
+
+        (double X, double Y) GetParentConnectionPoint(double row, int depth)
+        {
+            if (isVertical)
+            {
+                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
+                double y = ChartPadding + depth * levelHeight + BoxHeight;
+                return (x, y);
+            }
+            else
+            {
+                double x = ChartPadding + depth * (BoxWidth + ColumnGap) + BoxWidth;
+                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
+                return (x, y);
+            }
+        }
+
+        (double X, double Y) GetChildConnectionPoint(double row, int depth)
+        {
+            if (isVertical)
+            {
+                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
+                double y = ChartPadding + depth * levelHeight;
+                return (x, y);
+            }
+            else
+            {
+                double x = ChartPadding + depth * (BoxWidth + ColumnGap);
+                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
+                return (x, y);
+            }
+        }
 
         // ---- Connectors first, so node boxes visually sit on top of the lines. ----
         void DrawConnectors(FolderNode node)
@@ -338,14 +410,26 @@ public partial class OrgChartView : UserControl
             {
                 if (!positions.TryGetValue(child, out var childPos)) continue;
 
-                var (px, py) = ToPixel(parentPos.Row, parentPos.Depth, rightEdge: true);
-                var (cx, cy) = ToPixel(childPos.Row, childPos.Depth, rightEdge: false);
-                double midX = (px + cx) / 2.0;
+                var (px, py) = GetParentConnectionPoint(parentPos.Row, parentPos.Depth);
+                var (cx, cy) = GetChildConnectionPoint(childPos.Row, childPos.Depth);
 
                 var figure = new PathFigure { StartPoint = new Point(px, py) };
-                figure.Segments.Add(new LineSegment(new Point(midX, py), true));
-                figure.Segments.Add(new LineSegment(new Point(midX, cy), true));
-                figure.Segments.Add(new LineSegment(new Point(cx, cy), true));
+
+                if (isVertical)
+                {
+                    double midY = (py + cy) / 2.0;
+                    figure.Segments.Add(new LineSegment(new Point(px, midY), true));
+                    figure.Segments.Add(new LineSegment(new Point(cx, midY), true));
+                    figure.Segments.Add(new LineSegment(new Point(cx, cy), true));
+                }
+                else
+                {
+                    double midX = (px + cx) / 2.0;
+                    figure.Segments.Add(new LineSegment(new Point(midX, py), true));
+                    figure.Segments.Add(new LineSegment(new Point(midX, cy), true));
+                    figure.Segments.Add(new LineSegment(new Point(cx, cy), true));
+                }
+
                 var geometry = new PathGeometry();
                 geometry.Figures.Add(figure);
 
@@ -394,9 +478,20 @@ public partial class OrgChartView : UserControl
                 Margin = new Thickness(6, 0, 6, 0)
             };
 
-            var (x, y) = ToPixel(pos.Row, pos.Depth, rightEdge: false);
-            Canvas.SetLeft(box, x);
-            Canvas.SetTop(box, y - BoxHeight / 2);
+            double boxX, boxY;
+            if (isVertical)
+            {
+                boxX = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 - BoxWidth / 2.0;
+                boxY = ChartPadding + pos.Depth * levelHeight;
+            }
+            else
+            {
+                boxX = ChartPadding + pos.Depth * (BoxWidth + ColumnGap);
+                boxY = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 - BoxHeight / 2.0;
+            }
+
+            Canvas.SetLeft(box, boxX);
+            Canvas.SetTop(box, boxY);
 
             _boxMap[box] = node;
 
@@ -626,12 +721,6 @@ public partial class OrgChartView : UserControl
         };
     }
 
-    private (double X, double Y) ToPixel(double row, int depth, bool rightEdge)
-    {
-        double x = ChartPadding + depth * (BoxWidth + ColumnGap) + (rightEdge ? BoxWidth : 0);
-        double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
-        return (x, y);
-    }
-
     private static (Color Fill, Color Border) GetPalette(int depth) => Palette[depth % Palette.Length];
 }
+

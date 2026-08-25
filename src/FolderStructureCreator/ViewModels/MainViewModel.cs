@@ -127,6 +127,23 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private bool _isVerticalOrgChart;
+    /// <summary>False = Horizontal (Left-to-Right), True = Vertical (Top-to-Bottom) dendrogram layout.</summary>
+    public bool IsVerticalOrgChart
+    {
+        get => _isVerticalOrgChart;
+        set
+        {
+            if (SetField(ref _isVerticalOrgChart, value))
+            {
+                OnPropertyChanged(nameof(OrgChartLayoutButtonText));
+                RaiseStructureChanged();
+            }
+        }
+    }
+
+    public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Layout: Vertical ⬇" : "Layout: Horizontal ➡️";
+
     private bool _isDestinationSidebarCollapsed;
     /// <summary>Lets the chart use the full workspace on smaller screens without clearing the selected target.</summary>
     public bool IsDestinationSidebarCollapsed
@@ -264,6 +281,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ShowPinnedFolderChartCommand { get; }
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
+    public RelayCommand ToggleOrgChartLayoutCommand { get; }
 
     public MainViewModel()
     {
@@ -282,6 +300,7 @@ public class MainViewModel : ViewModelBase
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
+        ToggleOrgChartLayoutCommand = new RelayCommand(_ => IsVerticalOrgChart = !IsVerticalOrgChart);
         ClearSearchCommand = new RelayCommand(_ => { SearchQuery = string.Empty; IsSearchDropdownOpen = false; });
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
