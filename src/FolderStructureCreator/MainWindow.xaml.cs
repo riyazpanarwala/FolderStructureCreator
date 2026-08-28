@@ -166,13 +166,13 @@ public partial class MainWindow : Window
         }
     }
 
-    // Double-click a folder name in the structure builder to rename it in place.
+    // Double-click a folder name in the structure builder to open it in Explorer.
     private void StructureNodeText_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount != 2) return;
         if (sender is not FrameworkElement { DataContext: FolderNode node }) return;
 
-        node.IsEditing = true;
+        ViewModel.OpenInExplorer(node);
         e.Handled = true;
     }
 

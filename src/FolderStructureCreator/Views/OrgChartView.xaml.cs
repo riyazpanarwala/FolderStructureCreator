@@ -47,7 +47,7 @@ public partial class OrgChartView : UserControl
     /// <summary>Raised when a node box is single-clicked (used to drive selection in the toolbar).</summary>
     public event Action<FolderNode>? NodeClicked;
 
-    /// <summary>Raised after an inline rename (via double-click) is committed to the model.</summary>
+    /// <summary>Raised after an inline rename is committed to the model.</summary>
     public event Action? StructureEdited;
 
     /// <summary>Raised when an inline rename is committed, passing the node and requested new name.</summary>
@@ -544,7 +544,7 @@ public partial class OrgChartView : UserControl
                 {
                     _draggedNode = null;
                     _isDragging = false;
-                    BeginRename(node, box);
+                    OpenInExplorerRequested?.Invoke(node);
                     e.Handled = true;
                     return;
                 }

@@ -33,7 +33,7 @@ Right-clicking any folder node (in either Tree View or Org Chart View) provides 
   - **Mini-Map Navigation Overlay** — A bird's-eye thumbnail preview box in the bottom-right corner with a live blue viewfinder box. Click or drag anywhere on the mini-map to instantly pan the main diagram. Toggle via `🗺️ Map` on the toolbar.
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
   - **Drag & Drop Moving** — Drag any box and drop it onto another node to instantly move/re-parent it in the tree structure.
-  - **Double-Click to Rename** — Double-click any box on the diagram canvas to rename it inline.
+  - **Double-Click to Open in Explorer** — Double-click any folder node in Tree View or box on the diagram canvas to open its physical location in Windows Explorer.
 
 ### ⚡ Command Line (CLI) & Direct Folder-to-Folder Copy
 - **Direct Folder Replication** — Replicate any existing directory's folder hierarchy directly to a target destination from terminal/PowerShell without launching the GUI.

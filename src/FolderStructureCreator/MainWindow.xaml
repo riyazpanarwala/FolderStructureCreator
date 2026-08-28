@@ -243,7 +243,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Double-click to rename. Drag &amp; drop box to move. Drag canvas or middle-click to pan." Style="{StaticResource SubText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Double-click to open in Explorer. Drag &amp; drop box to move. Drag canvas or middle-click to pan." Style="{StaticResource SubText}" VerticalAlignment="Center"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="🗺️ Map" Style="{StaticResource ToolButton}" Command="{Binding ToggleMiniMapCommand}" ToolTip="Toggle Mini-Map navigation overlay" Margin="0,0,4,0"/>
                                     <Button Content="{Binding OrgChartLayoutButtonText}" Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle Org Chart layout direction (Horizontal ➡️ / Vertical ⬇️)" Margin="0,0,4,0"/>
