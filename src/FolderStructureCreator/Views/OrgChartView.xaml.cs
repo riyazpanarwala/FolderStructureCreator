@@ -2,10 +2,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using FolderStructureCreator.Models;
 using System.Linq;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Security;
 
 namespace FolderStructureCreator.Views;
 
@@ -476,7 +480,7 @@ public partial class OrgChartView : UserControl
                 var geometry = new PathGeometry();
                 geometry.Figures.Add(figure);
 
-                RootCanvas.Children.Add(new Path
+                RootCanvas.Children.Add(new System.Windows.Shapes.Path
                 {
                     Data = geometry,
                     Stroke = new SolidColorBrush(GetPalette(childPos.Depth).Border),
@@ -998,5 +1002,305 @@ public partial class OrgChartView : UserControl
     {
         IsMiniMapVisible = false;
     }
+
+    #region Export Diagram Features (PNG / SVG / PDF)
+
+    private static string ToHexColor(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    public RenderTargetBitmap RenderDiagramToBitmap(double dpiScale = 2.0)
+    {
+        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
+            throw new InvalidOperationException("Diagram canvas is empty.");
+
+        if (_dragGhostBorder != null)
+            _dragGhostBorder.Visibility = Visibility.Collapsed;
+
+        double oldScaleX = ChartScale.ScaleX;
+        double oldScaleY = ChartScale.ScaleY;
+
+        try
+        {
+            ChartScale.ScaleX = 1.0;
+            ChartScale.ScaleY = 1.0;
+            RootCanvas.UpdateLayout();
+
+            double width = RootCanvas.Width;
+            double height = RootCanvas.Height;
+
+            int pixelWidth = (int)Math.Ceiling(width * dpiScale);
+            int pixelHeight = (int)Math.Ceiling(height * dpiScale);
+
+            var drawingVisual = new DrawingVisual();
+            using (DrawingContext dc = drawingVisual.RenderOpen())
+            {
+                var bgBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A));
+                dc.DrawRectangle(bgBrush, null, new Rect(0, 0, width, height));
+
+                var visualBrush = new VisualBrush(RootCanvas)
+                {
+                    Stretch = Stretch.None,
+                    AlignmentX = AlignmentX.Left,
+                    AlignmentY = AlignmentY.Top
+                };
+                dc.DrawRectangle(visualBrush, null, new Rect(0, 0, width, height));
+            }
+
+            var rtb = new RenderTargetBitmap(
+                pixelWidth,
+                pixelHeight,
+                96 * dpiScale,
+                96 * dpiScale,
+                PixelFormats.Pbgra32);
+
+            rtb.Render(drawingVisual);
+            return rtb;
+        }
+        finally
+        {
+            ChartScale.ScaleX = oldScaleX;
+            ChartScale.ScaleY = oldScaleY;
+            RootCanvas.UpdateLayout();
+        }
+    }
+
+    public void ExportToPng(string filePath)
+    {
+        var rtb = RenderDiagramToBitmap(2.0);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+        using var stream = File.Create(filePath);
+        encoder.Save(stream);
+    }
+
+    public void ExportToSvg(string filePath)
+    {
+        if (_lastRoots.Count == 0 || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
+            throw new InvalidOperationException("Diagram canvas is empty.");
+
+        double width = RootCanvas.Width;
+        double height = RootCanvas.Height;
+        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
+
+        double nextRow = 0;
+        var positions = new Dictionary<FolderNode, (double Row, int Depth)>();
+
+        double LayoutNode(FolderNode node, int depth)
+        {
+            if (node.Children.Count == 0)
+            {
+                double row = nextRow;
+                nextRow += 1;
+                positions[node] = (row, depth);
+                return row;
+            }
+
+            double first = -1, last = -1;
+            foreach (var child in node.Children)
+            {
+                var r = LayoutNode(child, depth + 1);
+                if (first < 0) first = r;
+                last = r;
+            }
+
+            double center = (first + last) / 2.0;
+            positions[node] = (center, depth);
+            return center;
+        }
+
+        foreach (var root in _lastRoots)
+            LayoutNode(root, 0);
+
+        const double siblingWidth = BoxWidth + 20;
+        const double levelHeight = BoxHeight + 46;
+
+        (double X, double Y) GetParentConnectionPoint(double row, int depth)
+        {
+            if (isVertical)
+            {
+                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
+                double y = ChartPadding + depth * levelHeight + BoxHeight;
+                return (x, y);
+            }
+            else
+            {
+                double x = ChartPadding + depth * (BoxWidth + ColumnGap) + BoxWidth;
+                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
+                return (x, y);
+            }
+        }
+
+        (double X, double Y) GetChildConnectionPoint(double row, int depth)
+        {
+            if (isVertical)
+            {
+                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
+                double y = ChartPadding + depth * levelHeight;
+                return (x, y);
+            }
+            else
+            {
+                double x = ChartPadding + depth * (BoxWidth + ColumnGap);
+                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
+                return (x, y);
+            }
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:F1}\" height=\"{height:F1}\" viewBox=\"0 0 {width:F1} {height:F1}\">");
+        sb.AppendLine("  <!-- Background -->");
+        sb.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#0F172A\"/>");
+        sb.AppendLine("  <!-- Connectors -->");
+
+        void DrawSvgConnectors(FolderNode node)
+        {
+            if (!positions.TryGetValue(node, out var parentPos)) return;
+
+            foreach (var child in node.Children)
+            {
+                if (!positions.TryGetValue(child, out var childPos)) continue;
+
+                var (px, py) = GetParentConnectionPoint(parentPos.Row, parentPos.Depth);
+                var (cx, cy) = GetChildConnectionPoint(childPos.Row, childPos.Depth);
+
+                string strokeColor = ToHexColor(GetPalette(childPos.Depth).Border);
+
+                if (isVertical)
+                {
+                    double midY = (py + cy) / 2.0;
+                    sb.AppendLine($"  <path d=\"M {px:F1},{py:F1} L {px:F1},{midY:F1} L {cx:F1},{midY:F1} L {cx:F1},{cy:F1}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                }
+                else
+                {
+                    double midX = (px + cx) / 2.0;
+                    sb.AppendLine($"  <path d=\"M {px:F1},{py:F1} L {midX:F1},{py:F1} L {midX:F1},{cy:F1} L {cx:F1},{cy:F1}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                }
+
+                DrawSvgConnectors(child);
+            }
+        }
+
+        foreach (var root in _lastRoots)
+            DrawSvgConnectors(root);
+
+        sb.AppendLine("  <!-- Nodes -->");
+        foreach (var (node, pos) in positions)
+        {
+            var (fill, border) = GetPalette(pos.Depth);
+            bool isSelected = ReferenceEquals(node, _lastSelected);
+            bool isMatch = node.IsMatchingSearch;
+
+            Color fillColor = isMatch ? Color.FromRgb(0xFE, 0xF0, 0x8A) : fill;
+            Color borderColor = isSelected ? Color.FromRgb(0x0F, 0x76, 0x6E) : (isMatch ? Color.FromRgb(0xD9, 0x77, 0x06) : border);
+            double borderWidth = (isSelected || isMatch) ? 2.5 : 1.0;
+
+            double boxX, boxY;
+            if (isVertical)
+            {
+                boxX = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 - BoxWidth / 2.0;
+                boxY = ChartPadding + pos.Depth * levelHeight;
+            }
+            else
+            {
+                boxX = ChartPadding + pos.Depth * (BoxWidth + ColumnGap);
+                boxY = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 - BoxHeight / 2.0;
+            }
+
+            string fillHex = ToHexColor(fillColor);
+            string borderHex = ToHexColor(borderColor);
+            string escapedName = SecurityElement.Escape(node.Name) ?? string.Empty;
+
+            sb.AppendLine("  <g>");
+            sb.AppendLine($"    <rect x=\"{boxX:F1}\" y=\"{boxY:F1}\" width=\"{BoxWidth}\" height=\"{BoxHeight}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth:F1}\"/>");
+            sb.AppendLine($"    <text x=\"{boxX + BoxWidth / 2.0:F1}\" y=\"{boxY + BoxHeight / 2.0 + 4:F1}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
+            sb.AppendLine("  </g>");
+        }
+
+        sb.AppendLine("</svg>");
+        File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+    }
+
+    public void ExportToPdf(string filePath)
+    {
+        var rtb = RenderDiagramToBitmap(2.0);
+
+        using var ms = new MemoryStream();
+        var jpegEncoder = new JpegBitmapEncoder { QualityLevel = 95 };
+        jpegEncoder.Frames.Add(BitmapFrame.Create(rtb));
+        jpegEncoder.Save(ms);
+        byte[] jpegBytes = ms.ToArray();
+
+        double widthPt = RootCanvas.Width * 72.0 / 96.0;
+        double heightPt = RootCanvas.Height * 72.0 / 96.0;
+
+        WritePdfWithJpegImage(filePath, jpegBytes, rtb.PixelWidth, rtb.PixelHeight, widthPt, heightPt);
+    }
+
+    private static void WritePdfWithJpegImage(string filePath, byte[] jpegBytes, int pixelWidth, int pixelHeight, double widthPt, double heightPt)
+    {
+        using var fileStream = File.Create(filePath);
+        using var writer = new StreamWriter(fileStream, Encoding.ASCII);
+
+        var offsets = new List<long>();
+
+        void WriteHeader()
+        {
+            writer.Write("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
+            writer.Flush();
+        }
+
+        void RecordObj()
+        {
+            fileStream.Flush();
+            offsets.Add(fileStream.Position);
+        }
+
+        WriteHeader();
+
+        // Obj 1: Catalog
+        RecordObj();
+        writer.Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        writer.Flush();
+
+        // Obj 2: Pages
+        RecordObj();
+        writer.Write("2 0 obj\n<< /Type /Pages /Count 1 /Kids [ 3 0 R ] >>\nendobj\n");
+        writer.Flush();
+
+        // Obj 3: Page
+        RecordObj();
+        writer.Write($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {widthPt:F2} {heightPt:F2}] /Resources << /XObject << /Img1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
+        writer.Flush();
+
+        // Obj 4: Image XObject
+        RecordObj();
+        writer.Write($"4 0 obj\n<< /Type /XObject /Subtype /Image /Width {pixelWidth} /Height {pixelHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpegBytes.Length} >>\nstream\n");
+        writer.Flush();
+        fileStream.Write(jpegBytes, 0, jpegBytes.Length);
+        writer.Write("\nendstream\nendobj\n");
+        writer.Flush();
+
+        // Obj 5: Page Content Stream
+        string contentStream = $"q\n{widthPt:F2} 0 0 {heightPt:F2} 0 0 cm\n/Img1 Do\nQ\n";
+        byte[] contentBytes = Encoding.ASCII.GetBytes(contentStream);
+
+        RecordObj();
+        writer.Write($"5 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n{contentStream}endstream\nendobj\n");
+        writer.Flush();
+
+        // XRef table
+        long xrefPos = fileStream.Position;
+        writer.Write($"xref\n0 {offsets.Count + 1}\n0000000000 65535 f \n");
+        foreach (var offset in offsets)
+        {
+            writer.Write($"{offset:D10} 00000 n \n");
+        }
+
+        // Trailer
+        writer.Write($"trailer\n<< /Size {offsets.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefPos}\n%%EOF\n");
+        writer.Flush();
+    }
+
+    #endregion
 }
 

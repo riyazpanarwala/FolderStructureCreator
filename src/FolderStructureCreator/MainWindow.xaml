@@ -245,6 +245,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Double-click to open in Explorer. Drag &amp; drop box to move. Drag canvas or middle-click to pan." Style="{StaticResource SubText}" VerticalAlignment="Center"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="📷 Export" Style="{StaticResource ToolButton}" Click="ExportOrgChart_Click" ToolTip="Export diagram as PNG, SVG, or PDF file" Margin="0,0,4,0"/>
                                     <Button Content="🗺️ Map" Style="{StaticResource ToolButton}" Command="{Binding ToggleMiniMapCommand}" ToolTip="Toggle Mini-Map navigation overlay" Margin="0,0,4,0"/>
                                     <Button Content="{Binding OrgChartLayoutButtonText}" Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle Org Chart layout direction (Horizontal ➡️ / Vertical ⬇️)" Margin="0,0,4,0"/>
                                     <Button Content="Toggle destination" Style="{StaticResource ToolButton}" Command="{Binding ToggleDestinationSidebarCommand}" ToolTip="Collapse or restore the destination sidebar" Visibility="{Binding ShouldShowDestinationSidebarToggle, Converter={StaticResource BoolToVis}}"/>

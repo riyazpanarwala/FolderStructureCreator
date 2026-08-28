@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FolderStructureCreator.Models;
 using FolderStructureCreator.ViewModels;
+using Microsoft.Win32;
 
 namespace FolderStructureCreator;
 
@@ -220,6 +221,49 @@ public partial class MainWindow : Window
     private void ZoomOutOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomOut();
     private void ResetZoomOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ResetZoom();
     private void FitOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToView();
+
+    private void ExportOrgChart_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.HasStructureNodes)
+        {
+            MessageBox.Show("There are no folders in the plan to export.", "Export Diagram", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export Dendrogram Diagram",
+            Filter = "PNG Image (*.png)|*.png|SVG Vector (*.svg)|*.svg|PDF Document (*.pdf)|*.pdf",
+            DefaultExt = ".png",
+            FileName = "folder_structure_diagram"
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            try
+            {
+                string ext = Path.GetExtension(dialog.FileName).ToLowerInvariant();
+                switch (ext)
+                {
+                    case ".svg":
+                        OrgChartHost.ExportToSvg(dialog.FileName);
+                        break;
+                    case ".pdf":
+                        OrgChartHost.ExportToPdf(dialog.FileName);
+                        break;
+                    default:
+                        OrgChartHost.ExportToPng(dialog.FileName);
+                        break;
+                }
+
+                ViewModel.StatusMessage = $"Successfully exported diagram to {Path.GetFileName(dialog.FileName)}";
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show($"Failed to export diagram:\n{ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
 
     private Point _treeViewDragStartPoint;
     private FolderNode? _treeViewDraggedNode;
