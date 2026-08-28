@@ -51,8 +51,12 @@ public static class ScriptGeneratorService
         sb.AppendLine();
         sb.AppendLine("param(");
         sb.AppendLine("    [Parameter(Position=0)]");
-        sb.AppendLine("    [string]$Target = (Get-Location)");
+        sb.AppendLine("    [string]$Target = ''");
         sb.AppendLine(")");
+        sb.AppendLine();
+        sb.AppendLine("if ([string]::IsNullOrWhiteSpace($Target)) {");
+        sb.AppendLine("    $Target = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }");
+        sb.AppendLine("}");
         sb.AppendLine();
         sb.AppendLine("Write-Host \"🚀 Creating folder structure in: $Target\" -ForegroundColor Cyan");
         sb.AppendLine();
@@ -77,6 +81,8 @@ public static class ScriptGeneratorService
         sb.AppendLine("}");
         sb.AppendLine();
         sb.AppendLine("Write-Host \"✅ Done! Created $createdCount folder(s) successfully.\" -ForegroundColor Green");
+        sb.AppendLine("Write-Host \"\"");
+        sb.AppendLine("Read-Host -Prompt \"Press Enter to exit...\"");
 
         return sb.ToString();
     }
@@ -111,6 +117,7 @@ public static class ScriptGeneratorService
         sb.AppendLine();
         sb.AppendLine("echo.");
         sb.AppendLine("echo Done! Folder structure created successfully.");
+        sb.AppendLine("pause");
 
         return sb.ToString();
     }
