@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:FolderStructureCreator.ViewModels"
         xmlns:conv="clr-namespace:FolderStructureCreator.Converters"
         xmlns:views="clr-namespace:FolderStructureCreator.Views"
+        xmlns:models="clr-namespace:FolderStructureCreator.Models"
         Title="Folder Structure Creator" Height="720" Width="1180" MinHeight="560" MinWidth="900"
         WindowStartupLocation="CenterScreen" Icon="AppIcon.ico"
         Background="{StaticResource BrushBg}"
@@ -74,32 +75,54 @@
                             <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="📌 Pinned Folders" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource BrushTextPrimary}"/>
-                                <TextBlock Grid.Column="1" Text="Quick Target Access" Style="{StaticResource SubText}" FontSize="10"/>
+                                <TextBlock Grid.Column="1" Text="Expand &amp; Quick Access" Style="{StaticResource SubText}" FontSize="10"/>
                             </Grid>
-                            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding PinnedFolders}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,2" Padding="6,4" Background="{StaticResource BrushPanel}" CornerRadius="4" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" ToolTip="{Binding Path}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="📂 " FontSize="12" Foreground="#F59E0B"/>
-                                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="11.5" Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center"/>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                        <Button Content="📊 Chart" Style="{StaticResource ToolButton}" Padding="5,2" FontSize="10.5" Command="{Binding DataContext.ShowPinnedFolderChartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Open chart view for this pinned folder"/>
-                                                        <Button Content="🎯" Style="{StaticResource ToolButton}" Padding="4,2" FontSize="10.5" Margin="2,0,0,0" Command="{Binding DataContext.SelectPinnedFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Select as target destination"/>
-                                                        <Button Content="✕" Style="{StaticResource ToolButton}" Padding="4,2" FontSize="10.5" Margin="2,0,0,0" Command="{Binding DataContext.UnpinFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" ToolTip="Unpin folder"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                            <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                <TreeView x:Name="PinnedFoldersTreeView" ItemsSource="{Binding PinnedFolders}" SelectedItemChanged="PinnedFoldersTreeView_SelectedItemChanged">
+                                    <TreeView.ItemContainerStyle>
+                                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                            <Setter Property="Tag" Value="{Binding DataContext, ElementName=PinnedFoldersTreeView}"/>
+                                            <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown"/>
+                                            <Setter Property="ContextMenu">
+                                                <Setter.Value>
+                                                    <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                        <MenuItem Header="📊 View Chart" Command="{Binding ShowPinnedFolderChartCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="🎯 Select Destination" Command="{Binding SelectPinnedFolderCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="📌 Pin Subfolder" Command="{Binding PinFolderCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                        <MenuItem Header="✕ Unpin Folder" Command="{Binding UnpinFolderCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                    </ContextMenu>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </TreeView.ItemContainerStyle>
+                                    <TreeView.Resources>
+                                        <HierarchicalDataTemplate DataType="{x:Type models:PinnedFolder}" ItemsSource="{Binding Node.Children}">
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="📂 " FontSize="11.5" Foreground="#F59E0B"/>
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5" Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center" ToolTip="{Binding Path}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0,0,0">
+                                                    <Button Content="📊 Chart" Style="{StaticResource ToolButton}" Padding="4,1" FontSize="10" Command="{Binding DataContext.ShowPinnedFolderChartCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="{Binding}" ToolTip="Open chart view for this pinned folder"/>
+                                                    <Button Content="🎯" Style="{StaticResource ToolButton}" Padding="4,1" FontSize="10" Margin="2,0,0,0" Command="{Binding DataContext.SelectPinnedFolderCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="{Binding}" ToolTip="Select as target destination"/>
+                                                    <Button Content="✕" Style="{StaticResource ToolButton}" Padding="4,1" FontSize="10" Margin="2,0,0,0" Command="{Binding DataContext.UnpinFolderCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="{Binding}" ToolTip="Unpin folder"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </HierarchicalDataTemplate>
+                                        <HierarchicalDataTemplate DataType="{x:Type models:FileSystemNode}" ItemsSource="{Binding Children}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                            </StackPanel>
+                                        </HierarchicalDataTemplate>
+                                    </TreeView.Resources>
+                                </TreeView>
                             </ScrollViewer>
                         </StackPanel>
                     </Border>

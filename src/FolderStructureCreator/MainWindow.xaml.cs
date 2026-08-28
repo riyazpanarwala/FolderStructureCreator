@@ -86,6 +86,18 @@ public partial class MainWindow : Window
         }
     }
 
+    private void PinnedFoldersTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is PinnedFolder pinned)
+        {
+            ViewModel.SelectPinnedFolder(pinned);
+        }
+        else if (e.NewValue is FileSystemNode node && !node.IsPlaceholder)
+        {
+            ViewModel.SelectedTargetNode = node;
+        }
+    }
+
     // TreeView.SelectedItem is read-only, so we bridge it into the view model here.
     private void DirectoryTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {

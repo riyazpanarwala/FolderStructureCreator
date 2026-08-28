@@ -335,9 +335,17 @@ public class MainViewModel : ViewModelBase
         });
         PinSelectedFolderCommand = new RelayCommand(_ => PinFolder(SelectedTargetNode?.FullPath), _ => SelectedTargetNode is { IsPlaceholder: false });
         PinFolderCommand = new RelayCommand(param => PinFolder(param as string ?? (param as FileSystemNode)?.FullPath ?? (param as PinnedFolder)?.Path));
-        UnpinFolderCommand = new RelayCommand(param => UnpinFolder(param as PinnedFolder ?? PinnedFolders.FirstOrDefault(p => p.Path == (param as string))));
-        ShowPinnedFolderChartCommand = new RelayCommand(async param => await ShowFolderOrgChartFromPathAsync(param as string ?? (param as PinnedFolder)?.Path));
-        SelectPinnedFolderCommand = new RelayCommand(param => SelectPinnedFolder(param as PinnedFolder ?? (param is string s ? new PinnedFolder(s) : null)));
+        UnpinFolderCommand = new RelayCommand(param => UnpinFolder(param as PinnedFolder ?? PinnedFolders.FirstOrDefault(p => string.Equals(p.Path, param as string ?? (param as FileSystemNode)?.FullPath, StringComparison.OrdinalIgnoreCase))));
+        ShowPinnedFolderChartCommand = new RelayCommand(async param => await ShowFolderOrgChartFromPathAsync(param as string ?? (param as PinnedFolder)?.Path ?? (param as FileSystemNode)?.FullPath));
+        SelectPinnedFolderCommand = new RelayCommand(param =>
+        {
+            if (param is PinnedFolder pinned)
+                SelectPinnedFolder(pinned);
+            else if (param is FileSystemNode node && !node.IsPlaceholder)
+                SelectedTargetNode = node;
+            else if (param is string s)
+                SelectPinnedFolder(new PinnedFolder(s));
+        });
         ToggleSortOrderCommand = new RelayCommand(_ => IsSortAscending = !IsSortAscending);
 
         LoadDrives();

@@ -20,6 +20,45 @@ public class PinnedFolder : INotifyPropertyChanged
         RefreshExists();
     }
 
+    private FileSystemNode? _node;
+    public FileSystemNode Node
+    {
+        get
+        {
+            if (_node == null || _node.FullPath != Path || _node.Name != Name)
+            {
+                _node = new FileSystemNode(Path, Name);
+            }
+            return _node;
+        }
+    }
+
+    public bool IsExpanded
+    {
+        get => Node.IsExpanded;
+        set
+        {
+            if (Node.IsExpanded != value)
+            {
+                Node.IsExpanded = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsSelected
+    {
+        get => Node.IsSelected;
+        set
+        {
+            if (Node.IsSelected != value)
+            {
+                Node.IsSelected = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public string Name
     {
         get => _name;
@@ -32,7 +71,10 @@ public class PinnedFolder : INotifyPropertyChanged
         set
         {
             if (SetField(ref _path, value))
+            {
+                _node = null;
                 RefreshExists();
+            }
         }
     }
 
@@ -49,11 +91,16 @@ public class PinnedFolder : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (Equals(field, value)) return false;
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        OnPropertyChanged(propertyName);
         return true;
     }
 }
