@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FolderStructureCreator.Models;
+using FolderStructureCreator.Services;
 using FolderStructureCreator.ViewModels;
 using Microsoft.Win32;
 
@@ -261,6 +263,53 @@ public partial class MainWindow : Window
             catch (System.Exception ex)
             {
                 MessageBox.Show($"Failed to export diagram:\n{ex.Message}", "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void ExportScript_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.HasStructureNodes)
+        {
+            MessageBox.Show("There are no folders in the plan to export.", "Export Script", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export Standalone Executable Script",
+            Filter = "PowerShell Script (*.ps1)|*.ps1|Windows Batch Script (*.bat)|*.bat|Bash Script (*.sh)|*.sh",
+            DefaultExt = ".ps1",
+            FileName = "create_structure"
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            try
+            {
+                string ext = Path.GetExtension(dialog.FileName).ToLowerInvariant();
+                string scriptContent = ext switch
+                {
+                    ".bat" => ScriptGeneratorService.GenerateBatchScript(ViewModel.RootFolders),
+                    ".sh" => ScriptGeneratorService.GenerateBashScript(ViewModel.RootFolders),
+                    _ => ScriptGeneratorService.GeneratePowerShellScript(ViewModel.RootFolders)
+                };
+
+                if (ext == ".sh")
+                {
+                    // Ensure Unix LF (\n) line endings for Linux/macOS compatibility
+                    File.WriteAllText(dialog.FileName, scriptContent.Replace("\r\n", "\n"), new UTF8Encoding(false));
+                }
+                else
+                {
+                    File.WriteAllText(dialog.FileName, scriptContent, Encoding.UTF8);
+                }
+
+                ViewModel.StatusMessage = $"Successfully exported standalone script to {Path.GetFileName(dialog.FileName)}";
+            }
+            catch (System.Exception ex)
+            {
+                MessageBox.Show($"Failed to export script:\n{ex.Message}", "Export Script Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

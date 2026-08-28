@@ -174,6 +174,7 @@
                         <WrapPanel Margin="0,10,0,0">
                             <Button Content="+ Add root" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushAccent}" Foreground="{StaticResource BrushAccent}" FontWeight="SemiBold"/>
                             <Button Content="📥 Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/>
+                            <Button Content="📜 Export script" Style="{StaticResource ToolButton}" Click="ExportScript_Click" ToolTip="Export blueprint as a standalone executable script (.ps1, .bat, or .sh)"/>
                             <Button Content="Clear" Style="{StaticResource ToolButton}" Command="{Binding ClearPlanCommand}"/>
                         </WrapPanel>
                         <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding QuickAddNames, UpdateSourceTrigger=PropertyChanged}" Tag="Add names: src, docs, tests" ToolTip="Comma-separated names; added under the selected folder"><TextBox.InputBindings><KeyBinding Key="Enter" Command="{Binding QuickAddCommand}"/></TextBox.InputBindings></TextBox><Button Grid.Column="1" Content="Add" Style="{StaticResource ToolButton}" Margin="8,0,0,0" Command="{Binding QuickAddCommand}" Visibility="{Binding HasQuickAddText, Converter={StaticResource BoolToVis}}"/></Grid>
