@@ -25,26 +25,38 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y
 
-      - name: Build Portable Executable & Installer Setup
+      - name: Build Portable Executables & Installer Setup
         shell: powershell
         run: |
           # Create output folders
           New-Item -ItemType Directory -Force -Path "publish"
           New-Item -ItemType Directory -Force -Path "installer-output"
 
-          # 1. Publish self-contained single-file portable executable
-          Write-Host "==> Publishing single-file portable EXE..."
+          # 1. Ultra-lightweight Framework-Dependent Portable EXE (~0.3 MB)
+          Write-Host "==> Publishing Lightweight Portable EXE (Framework-Dependent ~0.3 MB)..."
+          dotnet publish src/FolderStructureCreator/FolderStructureCreator.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -p:PublishSingleFile=true `
+            -o publish-lightweight
+
+          # Rename lightweight build for release
+          Copy-Item "publish-lightweight/FolderStructureCreator.exe" "installer-output/FolderStructureCreator.exe"
+          Compress-Archive -Path "installer-output/FolderStructureCreator.exe" -DestinationPath "installer-output/FolderStructureCreator_Portable_Lightweight.zip" -Force
+
+          # 2. Self-Contained Standalone EXE with Compression (~68 MB down from 154 MB)
+          Write-Host "==> Publishing Self-Contained Standalone EXE with compression..."
           dotnet publish src/FolderStructureCreator/FolderStructureCreator.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
-            -o publish
+            -p:EnableCompressionInSingleFile=true `
+            -o publish-standalone
 
-          # 2. Package Portable EXE into a ZIP archive
-          Write-Host "==> Creating Portable ZIP archive..."
-          Compress-Archive -Path "publish/FolderStructureCreator.exe" -DestinationPath "installer-output/FolderStructureCreator_Portable.zip" -Force
+          Copy-Item "publish-standalone/FolderStructureCreator.exe" "installer-output/FolderStructureCreator_Standalone.exe"
 
           # 3. Build Windows Installer (.exe Setup)
           Write-Host "==> Building Inno Setup Installer..."
@@ -55,7 +67,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            installer-output/FolderStructureCreator.exe
+            installer-output/FolderStructureCreator_Portable_Lightweight.zip
+            installer-output/FolderStructureCreator_Standalone.exe
             installer-output/FolderStructureCreatorSetup.exe
-            installer-output/FolderStructureCreator_Portable.zip
-            publish/FolderStructureCreator.exe
           generate_release_notes: true

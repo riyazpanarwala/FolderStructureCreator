@@ -130,23 +130,32 @@ dotnet run --project src/FolderStructureCreator/FolderStructureCreator.csproj
 
 ## 📦 Deployment & Release Options
 
-### 1. 🚀 Portable Single-File Executable (Self-Contained)
-Generate a single portable `.exe` file that runs on any Windows 10/11 machine without needing .NET pre-installed:
+### 1. ⚡ Lightweight Portable Executable (~0.3 MB / 320 KB)
+Produces a super-fast, tiny executable for machines that have [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) installed:
 ```powershell
-dotnet publish src/FolderStructureCreator/FolderStructureCreator.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish src/FolderStructureCreator/FolderStructureCreator.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 ```
-Output location: `publish/FolderStructureCreator.exe`.
+Output location: `publish/FolderStructureCreator.exe` (~320 KB).
 
-### 2. 📦 Team Installer (Inno Setup)
-Generate a standard Windows installer setup (`FolderStructureCreatorSetup.exe`) with Desktop/Start Menu shortcuts:
+### 2. 🚀 Self-Contained Compressed Standalone Executable (~68 MB)
+Generates a standalone `.exe` that runs on any Windows PC without requiring .NET pre-installed (with single-file assembly compression enabled):
+```powershell
+dotnet publish src/FolderStructureCreator/FolderStructureCreator.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
+```
+Output location: `publish/FolderStructureCreator.exe` (~68 MB).
+
+### 3. 📦 Team Installer (Inno Setup)
+Generates a standard Windows installer setup (`FolderStructureCreatorSetup.exe`) with Desktop & Start Menu shortcuts:
 ```powershell
 cd installer
 .\build-installer.ps1
 ```
 Output location: `installer/installer-output/FolderStructureCreatorSetup.exe`.
 
-### 3. 🤖 Automated Releases via GitHub Actions
-This project includes an automated GitHub Actions workflow (`.github/workflows/release.yml`).
+---
+
+### 🤖 Automated Releases via GitHub Actions
+This project includes an automated GitHub Actions workflow ([.github/workflows/release.yml](file:///.github/workflows/release.yml)).
 
 #### Automatic Release via Git Tags:
 Whenever you create and push a version tag (e.g. `v5.0.0`), GitHub Actions automatically builds the project and publishes a complete GitHub Release:
@@ -155,12 +164,8 @@ git tag v5.0.0
 git push origin v5.0.0
 ```
 
-#### Manual Release via GitHub UI:
-1. Go to your repository on GitHub $\rightarrow$ **Actions** tab.
-2. Select **Build & Create Release** workflow.
-3. Click **Run workflow**.
-
-**Generated Release Assets:**
-- `FolderStructureCreatorSetup.exe` — Full Windows Setup Wizard installer.
-- `FolderStructureCreator.exe` — Single portable executable (double-click to run).
-- `FolderStructureCreator_Portable.zip` — Portable executable in a `.zip` archive.
+#### Generated Release Assets:
+- **`FolderStructureCreator.exe` (~0.3 MB)** — Ultra-lightweight portable executable (Framework-Dependent).
+- **`FolderStructureCreator_Portable_Lightweight.zip` (~0.3 MB)** — Lightweight portable executable zipped.
+- **`FolderStructureCreator_Standalone.exe` (~68 MB)** — Self-contained compressed portable executable (no .NET required).
+- **`FolderStructureCreatorSetup.exe` (~47 MB)** — Full Windows Setup Wizard installer.

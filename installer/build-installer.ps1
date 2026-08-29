@@ -28,6 +28,7 @@ dotnet publish $csproj `
     --self-contained true `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
