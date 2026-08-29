@@ -85,6 +85,8 @@ Export your blueprint folder plan directly as a standalone executable script tha
 ## 🏗️ Project Structure
 ```
 FolderStructureCreator.sln
+release.bat                       1-Click batch script to tag & push a new release
+release.ps1                       1-Click PowerShell script to tag & push a new release
 .github/workflows/
   release.yml                     GitHub Actions CI/CD workflow for automated releases
 src/FolderStructureCreator/
@@ -152,17 +154,18 @@ cd installer
 ```
 Output location: `installer/installer-output/FolderStructureCreatorSetup.exe`.
 
----
-
 ### 🤖 Automated Releases via GitHub Actions
 This project includes an automated GitHub Actions workflow ([.github/workflows/release.yml](file:///.github/workflows/release.yml)).
 
-#### Automatic Release via Git Tags:
-Whenever you create and push a version tag (e.g. `v5.0.0`), GitHub Actions automatically builds the project and publishes a complete GitHub Release:
-```powershell
-git tag v5.0.0
-git push origin v5.0.0
-```
+#### ⚡ Release Options:
+Whenever you want to trigger a new release, use any of these options:
+
+- **Option A (Double-Click Batch File):** Double-click [release.bat](file:///release.bat) in Windows Explorer and type the version (e.g. `5.0.2`).
+- **Option B (Git Terminal Alias):** Run `git tag-push v5.0.2` in your terminal.
+- **Option C (PowerShell Script):** Run `.\release.ps1 v5.0.2` in PowerShell.
+- **Option D (Manual Git Commands):** Run `git tag v5.0.2` followed by `git push origin v5.0.2`.
+
+All options will create and push the version tag to GitHub, triggering GitHub Actions to build and publish the release.
 
 #### Generated Release Assets:
 - **`FolderStructureCreator.exe` (~0.3 MB)** — Ultra-lightweight portable executable (Framework-Dependent).
