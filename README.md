@@ -40,7 +40,12 @@ Export your blueprint folder plan directly as a standalone executable script tha
 - **Org Chart Diagram** — Interactive dendrogram diagram with depth-colored boxes and right-angle connector lines.
   - **📷 Diagram Export (PNG / SVG / PDF)** — Export the complete dendrogram diagram to high-resolution PNG images, SVG vector graphics, or PDF vector documents with full depth coloring and connector lines.
   - **Layout Direction Toggle** — Dynamically switch diagram orientation between **Horizontal (Left-to-Right ➡️)** and **Vertical (Top-to-Bottom ⬇️)** dendrogram views via the toolbar toggle button.
-  - **Mini-Map Navigation Overlay** — A bird's-eye thumbnail preview box in the bottom-right corner with a live blue viewfinder box. Click or drag anywhere on the mini-map to instantly pan the main diagram. Toggle via `🗺️ Map` on the toolbar.
+  - **🗺️ Floating Mini-Map Navigation Overlay** — Interactive bird's-eye thumbnail overlay providing total navigation control across large diagrams:
+    - **Draggable Window Header** — Reposition the mini-map window anywhere on the canvas by dragging its top header bar.
+    - **Interactive Viewfinder & Smooth Pan** — Live viewfinder rect (`#38BDF8`) showing current viewport bounds; click or drag to pan with smooth animated scrolling.
+    - **Viewfinder Resizing & Mouse Wheel Zoom** — Drag viewfinder borders/corners or scroll mouse wheel on the mini-map to zoom in/out dynamically.
+    - **Selection & Search Match Overlays** — Visual indicator dots highlight the selected node (`🎯`) and search result matches (`🔍`) with hover tooltips.
+    - **Expand / Shrink & Minimize Badge** — Toggle between standard (160×110) and expanded (260×175) window sizes (`↗`/`↙`), minimize into a floating corner badge (`🗺️ Mini-Map`), or double-click to Fit-to-View (`🎯`). Toggle visibility via `🗺️ Map` on the main toolbar.
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
   - **Double-Click to Open in Explorer** — Double-click any folder node in Tree View or box on the diagram canvas to open its physical location in Windows Explorer.
 
