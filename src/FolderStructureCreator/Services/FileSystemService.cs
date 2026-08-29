@@ -181,6 +181,8 @@ public static class FileSystemService
     {
         public FolderNode Root { get; set; } = null!;
         public int FolderCount { get; set; }
+        /// <summary>Number of subfolders skipped due to ignore rules (.structureignore / .gitignore / defaults).</summary>
+        public int IgnoredCount { get; set; }
         /// <summary>True if the scan hit a safety limit (too many folders or too deep) and stopped early.</summary>
         public bool Truncated { get; set; }
     }
@@ -194,15 +196,21 @@ public static class FileSystemService
     /// the whole import stops at MaxImportTotalNodes folders total, and recursion stops at
     /// MaxImportDepth levels deep. If any limit is hit, ImportResult.Truncated is set to true.
     /// </summary>
-    public static ImportResult BuildFolderNodeTree(string sourcePath, int maxTotalNodes = MaxImportTotalNodes)
+    public static ImportResult BuildFolderNodeTree(string sourcePath, int maxTotalNodes = MaxImportTotalNodes, IgnoreRuleService? ignoreRules = null)
     {
         var result = new ImportResult();
         maxTotalNodes = Math.Clamp(maxTotalNodes, 1, MaxImportTotalNodes);
-        result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result);
+
+        if (ignoreRules == null)
+        {
+            ignoreRules = IgnoreRuleService.CreateForSource(sourcePath, includeBuiltInDefaults: true);
+        }
+
+        result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result, ignoreRules);
         return result;
     }
 
-    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result)
+    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result, IgnoreRuleService? ignoreRules)
     {
         var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
         if (string.IsNullOrEmpty(name)) name = sourcePath; // e.g. a drive root like "D:\"
@@ -221,13 +229,20 @@ public static class FileSystemService
 
         foreach (var subDir in subDirs)
         {
+            var subDirName = Path.GetFileName(subDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (ignoreRules != null && ignoreRules.IsIgnored(subDirName))
+            {
+                result.IgnoredCount++;
+                continue;
+            }
+
             if (result.FolderCount >= maxTotalNodes)
             {
                 result.Truncated = true;
                 break;
             }
 
-            var child = BuildRecursive(subDir, node, depth + 1, maxTotalNodes, result);
+            var child = BuildRecursive(subDir, node, depth + 1, maxTotalNodes, result, ignoreRules);
             node.Children.Add(child);
         }
 

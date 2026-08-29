@@ -86,7 +86,16 @@ public partial class App : Application
             if (options.IsDryRun) Console.WriteLine("Mode:   [DRY RUN - No disk writes]");
             Console.WriteLine();
 
-            var importResult = FileSystemService.BuildFolderNodeTree(fullSourcePath);
+            var ignoreRules = options.EnableIgnoreRules
+                ? IgnoreRuleService.CreateForSource(fullSourcePath)
+                : new IgnoreRuleService(includeBuiltInDefaults: false);
+
+            var importResult = FileSystemService.BuildFolderNodeTree(fullSourcePath, ignoreRules: ignoreRules);
+            if (importResult.IgnoredCount > 0)
+            {
+                Console.WriteLine($"[INFO] Ignored {importResult.IgnoredCount} subfolder(s) based on ignore rules (.structureignore / .gitignore / defaults).");
+            }
+
             if (importResult.Root == null || importResult.Root.Children.Count == 0)
             {
                 Console.WriteLine($"[INFO] Source directory '{fullSourcePath}' contains no subfolders to copy.");
@@ -138,6 +147,7 @@ public partial class App : Application
         public bool IsSilent { get; set; }
         public bool ShowHelp { get; set; }
         public bool IsCliMode { get; set; }
+        public bool EnableIgnoreRules { get; set; } = true;
         public string? DirectOpenPath { get; set; }
     }
 
@@ -167,6 +177,11 @@ public partial class App : Application
             {
                 options.IsCliMode = true;
                 options.IsDryRun = true;
+            }
+            else if (arg.Equals("--no-ignore", StringComparison.OrdinalIgnoreCase))
+            {
+                options.IsCliMode = true;
+                options.EnableIgnoreRules = false;
             }
             else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||
                      arg.Equals("-s", StringComparison.OrdinalIgnoreCase))
@@ -219,6 +234,7 @@ Options:
   -src, --source <path>   Source reference folder to copy structure from
   -dst, --target <path>   Destination target folder where structure will be created
   --dry-run               Preview folders to be created without writing to disk
+  --no-ignore             Disable automatic .structureignore / .gitignore and default ignore rules
   --silent, -s            Run headlessly without GUI popups
   -h, --help              Show this CLI help information
 

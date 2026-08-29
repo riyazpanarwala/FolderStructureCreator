@@ -115,6 +115,14 @@ public class MainViewModel : ViewModelBase
         set => SetField(ref _isLiveSyncMode, value);
     }
 
+    private bool _enableIgnoreRules = true;
+    /// <summary>When true, folder imports automatically ignore system/build folders (node_modules, bin, obj, .git, etc.) and .structureignore / .gitignore rules.</summary>
+    public bool EnableIgnoreRules
+    {
+        get => _enableIgnoreRules;
+        set => SetField(ref _enableIgnoreRules, value);
+    }
+
     private bool _isOrgChartView;
     /// <summary>False = editable TreeView, True = the read-visual org-chart diagram (auto-enabled after an import).</summary>
     public bool IsOrgChartView
@@ -463,7 +471,8 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, MaxOrgChartNodes));
+            var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(folderPath) : new IgnoreRuleService(includeBuiltInDefaults: false);
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, MaxOrgChartNodes, ignoreRules));
             RootFolders.Clear();
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
@@ -471,9 +480,10 @@ public class MainViewModel : ViewModelBase
             IsOrgChartView = true;
             IsLiveSyncMode = true;
 
+            string ignoreText = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
             StatusMessage = importResult.Truncated
-                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s). Live computer sync enabled."
-                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) in the org chart. Live computer sync enabled.";
+                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}. Live computer sync enabled."
+                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText} in the org chart. Live computer sync enabled.";
 
             OnPropertyChanged(nameof(TotalFolderCount));
             RaiseStructureChanged();
@@ -1021,12 +1031,14 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(sourcePath));
+            var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(sourcePath) : new IgnoreRuleService(includeBuiltInDefaults: false);
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(sourcePath, FileSystemService.MaxImportTotalNodes, ignoreRules));
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             IsOrgChartView = true; // an import reads best as the visual org-chart diagram
 
-            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s) (folders only, files were not read or copied). ";
+            string ignoreInfo = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
+            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}. ";
 
             message += importResult.Truncated
                 ? $"Note: this folder is very large, so the import stopped early at a safety limit (~{FileSystemService.MaxImportTotalNodes} folders) to avoid freezing the app - not everything nested deep inside is shown."
@@ -1052,11 +1064,13 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath));
+            var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(folderPath) : new IgnoreRuleService(includeBuiltInDefaults: false);
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, FileSystemService.MaxImportTotalNodes, ignoreRules));
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
 
-            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s).";
+            string ignoreInfo = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
+            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}.";
             if (importResult.Truncated)
             {
                 message += $" Note: very large folder, import capped at safety limit (~{FileSystemService.MaxImportTotalNodes} folders).";

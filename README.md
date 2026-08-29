@@ -10,6 +10,7 @@ A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse 
 - **+ Add Root Folder** — Create top-level root folders to start building a structure plan from scratch.
 - **Quick Batch-Add** — Type comma-separated folder names (e.g., `src, docs, tests, scripts`), press **Enter** (or click **Add**), and all of them are added at once. If a folder is selected, they are added as subfolders; otherwise, as new root folders.
 - **📥 Import Reference Folder** — Pick any folder on your computer and import its entire folder hierarchy (names + nesting) directly into your blueprint plan.
+- **🚫 Smart Import & Ignore Rules (`.structureignore`)** — Automatically filters out build, cache, and system subfolders (`node_modules`, `.git`, `.vs`, `bin`, `obj`, `dist`, `build`, etc.) during imports, and respects `.structureignore` or `.gitignore` files found in the source directory. Can be toggled on/off via the toolbar.
 - **Hang-Proof Import** — Bounded directory enumeration ensures safety with huge folders (capped per level and total depth) to prevent app freezing.
 - **Clear Plan** — Clear all folders from the screen draft at once with one click (never affects files on disk).
 
@@ -47,6 +48,7 @@ Right-clicking any folder node (in either Tree View or Org Chart View) provides 
   | `-src`, `--source` | `<path>` | Source reference folder to copy structure from. |
   | `-dst`, `--target` | `<path>` | Destination target folder where structure will be created. |
   | `--dry-run` | None | Preview folder creation simulation without disk writes. |
+  | `--no-ignore` | None | Disable automatic `.structureignore` / `.gitignore` and default ignore rules. |
   | `--silent`, `-s` | None | Run headlessly without opening the GUI window. |
   | `-h`, `--help` | None | Display CLI help documentation. |
 
