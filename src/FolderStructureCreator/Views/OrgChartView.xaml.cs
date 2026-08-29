@@ -137,12 +137,38 @@ public partial class OrgChartView : UserControl
     {
         if (d is OrgChartView chart)
         {
-            chart.MiniMapBorder.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
-            chart.UpdateMiniMapViewport();
+            chart.ApplyMiniMapVisibility();
         }
     }
 
     private bool _isMiniMapDragging;
+    private bool _isMiniMapMinimized;
+    private bool _isMiniMapExpanded;
+
+    private void ApplyMiniMapVisibility()
+    {
+        if (MiniMapBorder == null || MiniMapBadge == null) return;
+
+        if (!IsMiniMapVisible)
+        {
+            MiniMapBorder.Visibility = Visibility.Collapsed;
+            MiniMapBadge.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            if (_isMiniMapMinimized)
+            {
+                MiniMapBorder.Visibility = Visibility.Collapsed;
+                MiniMapBadge.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                MiniMapBorder.Visibility = Visibility.Visible;
+                MiniMapBadge.Visibility = Visibility.Collapsed;
+                UpdateMiniMapViewport();
+            }
+        }
+    }
 
     public OrgChartView()
     {
@@ -895,7 +921,7 @@ public partial class OrgChartView : UserControl
 
     public void UpdateMiniMapViewport()
     {
-        if (MiniMapBorder == null || MiniMapViewportRect == null) return;
+        if (MiniMapBorder == null || MiniMapViewportRect == null || MiniMapCanvas == null) return;
         if (MiniMapBorder.Visibility != Visibility.Visible || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
         {
             MiniMapViewportRect.Visibility = Visibility.Collapsed;
@@ -906,8 +932,8 @@ public partial class OrgChartView : UserControl
 
         double canvasW = RootCanvas.Width;
         double canvasH = RootCanvas.Height;
-        double mapW = 160.0;
-        double mapH = 110.0;
+        double mapW = MiniMapCanvas.Width > 0 ? MiniMapCanvas.Width : 160.0;
+        double mapH = MiniMapCanvas.Height > 0 ? MiniMapCanvas.Height : 110.0;
 
         double scale = Math.Min(mapW / canvasW, mapH / canvasH);
         double previewW = canvasW * scale;
@@ -943,6 +969,13 @@ public partial class OrgChartView : UserControl
 
     private void MiniMapCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ClickCount == 2)
+        {
+            FitToView();
+            e.Handled = true;
+            return;
+        }
+
         _isMiniMapDragging = true;
         MiniMapCanvas.CaptureMouse();
         ScrollFromMiniMapPos(e.GetPosition(MiniMapCanvas));
@@ -964,18 +997,25 @@ public partial class OrgChartView : UserControl
         {
             _isMiniMapDragging = false;
             MiniMapCanvas.ReleaseMouseCapture();
+
+            if (!MiniMapBorder.IsMouseOver)
+            {
+                MiniMapBorder.Opacity = 0.6;
+            }
+
             e.Handled = true;
         }
     }
 
+
     private void ScrollFromMiniMapPos(Point mapPos)
     {
-        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0) return;
+        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0 || MiniMapCanvas == null) return;
 
         double canvasW = RootCanvas.Width;
         double canvasH = RootCanvas.Height;
-        double mapW = 160.0;
-        double mapH = 110.0;
+        double mapW = MiniMapCanvas.Width > 0 ? MiniMapCanvas.Width : 160.0;
+        double mapH = MiniMapCanvas.Height > 0 ? MiniMapCanvas.Height : 110.0;
 
         double scale = Math.Min(mapW / canvasW, mapH / canvasH);
         double previewW = canvasW * scale;
@@ -996,6 +1036,63 @@ public partial class OrgChartView : UserControl
 
         ChartScrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetHOffset));
         ChartScrollViewer.ScrollToVerticalOffset(Math.Max(0, targetVOffset));
+    }
+
+    private void ToggleMiniMapSize_Click(object sender, RoutedEventArgs e)
+    {
+        _isMiniMapExpanded = !_isMiniMapExpanded;
+
+        double targetW = _isMiniMapExpanded ? 260.0 : 160.0;
+        double targetH = _isMiniMapExpanded ? 175.0 : 110.0;
+
+        MiniMapVisualContainer.Width = targetW;
+        MiniMapVisualContainer.Height = targetH;
+        MiniMapCanvas.Width = targetW;
+        MiniMapCanvas.Height = targetH;
+        MiniMapVisualRect.Width = targetW;
+        MiniMapVisualRect.Height = targetH;
+
+        ToggleMiniMapSizeButton.Content = _isMiniMapExpanded ? "↙" : "↗";
+        ToggleMiniMapSizeButton.ToolTip = _isMiniMapExpanded ? "Shrink Mini-Map size" : "Expand Mini-Map size";
+
+        UpdateMiniMapViewport();
+        e.Handled = true;
+    }
+
+    private void MinimizeMiniMap_Click(object sender, RoutedEventArgs e)
+    {
+        _isMiniMapMinimized = true;
+        ApplyMiniMapVisibility();
+        e.Handled = true;
+    }
+
+    private void RestoreMiniMap_Click(object sender, RoutedEventArgs e)
+    {
+        _isMiniMapMinimized = false;
+        ApplyMiniMapVisibility();
+        e.Handled = true;
+    }
+
+    private void MiniMapFit_Click(object sender, RoutedEventArgs e)
+    {
+        FitToView();
+        e.Handled = true;
+    }
+
+    private void MiniMap_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (MiniMapBorder != null)
+        {
+            MiniMapBorder.Opacity = 1.0;
+        }
+    }
+
+    private void MiniMap_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (MiniMapBorder != null && !_isMiniMapDragging)
+        {
+            MiniMapBorder.Opacity = 0.6;
+        }
     }
 
     private void CloseMiniMap_Click(object sender, RoutedEventArgs e)
