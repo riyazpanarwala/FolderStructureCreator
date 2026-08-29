@@ -152,13 +152,6 @@ public class MainViewModel : ViewModelBase
 
     public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Layout: Vertical ⬇" : "Layout: Horizontal ➡️";
 
-    private bool _isMiniMapVisible = true;
-    /// <summary>Controls whether the floating mini-map thumbnail overlay is visible in the Org Chart.</summary>
-    public bool IsMiniMapVisible
-    {
-        get => _isMiniMapVisible;
-        set => SetField(ref _isMiniMapVisible, value);
-    }
 
     private bool _isDestinationSidebarCollapsed;
     /// <summary>Lets the chart use the full workspace on smaller screens without clearing the selected target.</summary>
@@ -299,7 +292,6 @@ public class MainViewModel : ViewModelBase
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
-    public RelayCommand ToggleMiniMapCommand { get; }
 
     public MainViewModel()
     {
@@ -320,7 +312,6 @@ public class MainViewModel : ViewModelBase
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
         ToggleOrgChartLayoutCommand = new RelayCommand(_ => IsVerticalOrgChart = !IsVerticalOrgChart);
-        ToggleMiniMapCommand = new RelayCommand(_ => IsMiniMapVisible = !IsMiniMapVisible);
         ClearSearchCommand = new RelayCommand(_ => { SearchQuery = string.Empty; IsSearchDropdownOpen = false; });
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
