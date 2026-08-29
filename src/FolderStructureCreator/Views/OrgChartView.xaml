@@ -51,14 +51,18 @@
                             PreviewMouseMove="MiniMapCanvas_PreviewMouseMove"
                             PreviewMouseLeftButtonUp="MiniMapCanvas_PreviewMouseLeftButtonUp"
                             PreviewMouseWheel="MiniMapCanvas_PreviewMouseWheel">
+                        <!-- Canvas bounds outline representing actual diagram extent within letterboxed viewport -->
+                        <Rectangle x:Name="MiniMapCanvasBoundsRect" Fill="#1E293B" Stroke="#475569" StrokeThickness="1" StrokeDashArray="2 2" RadiusX="2" RadiusY="2" Visibility="Collapsed"/>
                         <!-- Live Visual clone of main diagram canvas -->
-                        <Rectangle x:Name="MiniMapVisualRect" Width="160" Height="110">
+                        <Rectangle x:Name="MiniMapVisualRect" Width="160" Height="110"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   RenderOptions.EdgeMode="Aliased">
                             <Rectangle.Fill>
                                 <VisualBrush x:Name="MiniMapVisualBrush" Visual="{Binding ElementName=RootCanvas}" Stretch="Uniform"/>
                             </Rectangle.Fill>
                         </Rectangle>
                         <!-- Canvas overlay for node selection & search highlights -->
-                        <Canvas x:Name="MiniMapOverlayCanvas" Width="160" Height="110" IsHitTestVisible="False"/>
+                        <Canvas x:Name="MiniMapOverlayCanvas" Width="160" Height="110" IsHitTestVisible="True"/>
                         <!-- Viewfinder indicator representing current viewport -->
                         <Rectangle x:Name="MiniMapViewportRect" Stroke="#38BDF8" StrokeThickness="1.5" Fill="#3038BDF8" RadiusX="2" RadiusY="2" Cursor="SizeAll"/>
                     </Canvas>

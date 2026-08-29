@@ -149,6 +149,31 @@ public partial class OrgChartView : UserControl
     private Point _miniMapHeaderDragStart;
     private Point _miniMapTransformStart;
 
+    private enum MiniMapHitZone
+    {
+        None,
+        ViewportMove,
+        ResizeTopLeft,
+        ResizeTopRight,
+        ResizeBottomLeft,
+        ResizeBottomRight,
+        ResizeLeft,
+        ResizeRight,
+        ResizeTop,
+        ResizeBottom
+    }
+
+    private MiniMapHitZone _activeMiniMapResizeZone = MiniMapHitZone.None;
+    private bool _isMiniMapResizing;
+    private Point _miniMapResizeStartMousePos;
+    private double _miniMapResizeStartZoom;
+
+    private System.Windows.Threading.DispatcherTimer? _scrollAnimTimer;
+    private Point _scrollAnimStart;
+    private Point _scrollAnimTarget;
+    private DateTime _scrollAnimStartTime;
+    private const double ScrollAnimDurationMs = 220.0;
+
     private void ApplyMiniMapVisibility()
     {
         if (MiniMapBorder == null || MiniMapBadge == null) return;
@@ -972,6 +997,7 @@ public partial class OrgChartView : UserControl
         if (MiniMapBorder.Visibility != Visibility.Visible || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
         {
             MiniMapViewportRect.Visibility = Visibility.Collapsed;
+            if (MiniMapCanvasBoundsRect != null) MiniMapCanvasBoundsRect.Visibility = Visibility.Collapsed;
             if (MiniMapOverlayCanvas != null) MiniMapOverlayCanvas.Children.Clear();
             return;
         }
@@ -992,6 +1018,18 @@ public partial class OrgChartView : UserControl
 
         GetMiniMapScaleAndOffset(mapW, mapH, out double scaleX, out double scaleY, out double offsetX, out double offsetY);
 
+        double renderW = canvasW * scaleX;
+        double renderH = canvasH * scaleY;
+
+        if (MiniMapCanvasBoundsRect != null)
+        {
+            Canvas.SetLeft(MiniMapCanvasBoundsRect, offsetX);
+            Canvas.SetTop(MiniMapCanvasBoundsRect, offsetY);
+            MiniMapCanvasBoundsRect.Width = Math.Max(0, renderW);
+            MiniMapCanvasBoundsRect.Height = Math.Max(0, renderH);
+            MiniMapCanvasBoundsRect.Visibility = Visibility.Visible;
+        }
+
         double zoom = Math.Max(0.001, ChartScale.ScaleX);
         double viewportW = ChartScrollViewer.ViewportWidth;
         double viewportH = ChartScrollViewer.ViewportHeight;
@@ -1005,9 +1043,6 @@ public partial class OrgChartView : UserControl
         double rectTop = offsetY + (unscaledTop * scaleY);
         double rectWidth = unscaledWidth * scaleX;
         double rectHeight = unscaledHeight * scaleY;
-
-        double renderW = canvasW * scaleX;
-        double renderH = canvasH * scaleY;
 
         rectWidth = Math.Clamp(rectWidth, 12, mapW);
         rectHeight = Math.Clamp(rectHeight, 8, mapH);
@@ -1052,17 +1087,23 @@ public partial class OrgChartView : UserControl
             double mx = offsetX + (boxCenterX * scaleX);
             double my = offsetY + (boxCenterY * scaleY);
 
+            string nodePath = !string.IsNullOrWhiteSpace(node.RealPath) ? node.RealPath : node.FullPathDisplay;
+
             if (isMatch)
             {
                 var searchDot = new Ellipse
                 {
-                    Width = 6,
-                    Height = 6,
+                    Width = 7,
+                    Height = 7,
                     Fill = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
-                    ToolTip = $"Search Match: {node.Name}"
+                    Stroke = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F)),
+                    StrokeThickness = 1,
+                    ToolTip = $"🔍 Search Match: {nodePath}",
+                    Cursor = Cursors.Hand
                 };
-                Canvas.SetLeft(searchDot, mx - 3);
-                Canvas.SetTop(searchDot, my - 3);
+                ToolTipService.SetInitialShowDelay(searchDot, 100);
+                Canvas.SetLeft(searchDot, mx - 3.5);
+                Canvas.SetTop(searchDot, my - 3.5);
                 MiniMapOverlayCanvas.Children.Add(searchDot);
             }
 
@@ -1070,17 +1111,90 @@ public partial class OrgChartView : UserControl
             {
                 var selectDot = new Ellipse
                 {
-                    Width = 8,
-                    Height = 8,
+                    Width = 9,
+                    Height = 9,
                     Fill = new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8)),
                     Stroke = new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A)),
                     StrokeThickness = 1.5,
-                    ToolTip = $"Selected: {node.Name}"
+                    ToolTip = $"🎯 Selected: {nodePath}",
+                    Cursor = Cursors.Hand
                 };
-                Canvas.SetLeft(selectDot, mx - 4);
-                Canvas.SetTop(selectDot, my - 4);
+                ToolTipService.SetInitialShowDelay(selectDot, 100);
+                Canvas.SetLeft(selectDot, mx - 4.5);
+                Canvas.SetTop(selectDot, my - 4.5);
                 MiniMapOverlayCanvas.Children.Add(selectDot);
             }
+        }
+    }
+
+    private MiniMapHitZone GetViewportHitZone(Point mapPos)
+    {
+        if (MiniMapViewportRect == null || MiniMapViewportRect.Visibility != Visibility.Visible)
+            return MiniMapHitZone.None;
+
+        double left = Canvas.GetLeft(MiniMapViewportRect);
+        double top = Canvas.GetTop(MiniMapViewportRect);
+        double right = left + MiniMapViewportRect.Width;
+        double bottom = top + MiniMapViewportRect.Height;
+
+        const double margin = 6.0;
+
+        if (mapPos.X < left - margin || mapPos.X > right + margin ||
+            mapPos.Y < top - margin || mapPos.Y > bottom + margin)
+        {
+            return MiniMapHitZone.None;
+        }
+
+        bool nearLeft = Math.Abs(mapPos.X - left) <= margin;
+        bool nearRight = Math.Abs(mapPos.X - right) <= margin;
+        bool nearTop = Math.Abs(mapPos.Y - top) <= margin;
+        bool nearBottom = Math.Abs(mapPos.Y - bottom) <= margin;
+
+        if (nearTop && nearLeft) return MiniMapHitZone.ResizeTopLeft;
+        if (nearTop && nearRight) return MiniMapHitZone.ResizeTopRight;
+        if (nearBottom && nearLeft) return MiniMapHitZone.ResizeBottomLeft;
+        if (nearBottom && nearRight) return MiniMapHitZone.ResizeBottomRight;
+
+        if (nearLeft) return MiniMapHitZone.ResizeLeft;
+        if (nearRight) return MiniMapHitZone.ResizeRight;
+        if (nearTop) return MiniMapHitZone.ResizeTop;
+        if (nearBottom) return MiniMapHitZone.ResizeBottom;
+
+        if (mapPos.X >= left && mapPos.X <= right && mapPos.Y >= top && mapPos.Y <= bottom)
+            return MiniMapHitZone.ViewportMove;
+
+        return MiniMapHitZone.None;
+    }
+
+    private void UpdateMiniMapCursor(Point mapPos)
+    {
+        if (_isMiniMapDragging || _isMiniMapResizing) return;
+
+        MiniMapHitZone zone = GetViewportHitZone(mapPos);
+        switch (zone)
+        {
+            case MiniMapHitZone.ResizeTopLeft:
+            case MiniMapHitZone.ResizeBottomRight:
+                MiniMapCanvas.Cursor = Cursors.SizeNWSE;
+                break;
+            case MiniMapHitZone.ResizeTopRight:
+            case MiniMapHitZone.ResizeBottomLeft:
+                MiniMapCanvas.Cursor = Cursors.SizeNESW;
+                break;
+            case MiniMapHitZone.ResizeLeft:
+            case MiniMapHitZone.ResizeRight:
+                MiniMapCanvas.Cursor = Cursors.SizeWE;
+                break;
+            case MiniMapHitZone.ResizeTop:
+            case MiniMapHitZone.ResizeBottom:
+                MiniMapCanvas.Cursor = Cursors.SizeNS;
+                break;
+            case MiniMapHitZone.ViewportMove:
+                MiniMapCanvas.Cursor = Cursors.SizeAll;
+                break;
+            default:
+                MiniMapCanvas.Cursor = Cursors.Hand;
+                break;
         }
     }
 
@@ -1093,10 +1207,23 @@ public partial class OrgChartView : UserControl
             return;
         }
 
+        Point clickPos = e.GetPosition(MiniMapCanvas);
+        MiniMapHitZone hitZone = GetViewportHitZone(clickPos);
+
+        if (hitZone != MiniMapHitZone.None && hitZone != MiniMapHitZone.ViewportMove)
+        {
+            _activeMiniMapResizeZone = hitZone;
+            _isMiniMapResizing = true;
+            _miniMapResizeStartMousePos = clickPos;
+            _miniMapResizeStartZoom = ChartScale.ScaleX;
+            MiniMapCanvas.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
+
         _isMiniMapDragging = true;
         MiniMapCanvas.CaptureMouse();
 
-        Point clickPos = e.GetPosition(MiniMapCanvas);
         double curLeft = Canvas.GetLeft(MiniMapViewportRect);
         double curTop = Canvas.GetTop(MiniMapViewportRect);
         double curW = MiniMapViewportRect.Width;
@@ -1112,7 +1239,7 @@ public partial class OrgChartView : UserControl
         else
         {
             _miniMapDragGrabOffset = new Point(curW / 2.0, curH / 2.0);
-            ScrollFromMiniMapPos(clickPos, _miniMapDragGrabOffset);
+            ScrollFromMiniMapPos(clickPos, _miniMapDragGrabOffset, smooth: true);
         }
 
         e.Handled = true;
@@ -1120,15 +1247,56 @@ public partial class OrgChartView : UserControl
 
     private void MiniMapCanvas_PreviewMouseMove(object sender, MouseEventArgs e)
     {
+        Point currentPos = e.GetPosition(MiniMapCanvas);
+
+        if (_isMiniMapResizing)
+        {
+            double deltaX = currentPos.X - _miniMapResizeStartMousePos.X;
+            double deltaY = currentPos.Y - _miniMapResizeStartMousePos.Y;
+
+            double widthChange = 0;
+            if (_activeMiniMapResizeZone is MiniMapHitZone.ResizeRight or MiniMapHitZone.ResizeTopRight or MiniMapHitZone.ResizeBottomRight)
+                widthChange = deltaX;
+            else if (_activeMiniMapResizeZone is MiniMapHitZone.ResizeLeft or MiniMapHitZone.ResizeTopLeft or MiniMapHitZone.ResizeBottomLeft)
+                widthChange = -deltaX;
+
+            double heightChange = 0;
+            if (_activeMiniMapResizeZone is MiniMapHitZone.ResizeBottom or MiniMapHitZone.ResizeBottomLeft or MiniMapHitZone.ResizeBottomRight)
+                heightChange = deltaY;
+            else if (_activeMiniMapResizeZone is MiniMapHitZone.ResizeTop or MiniMapHitZone.ResizeTopLeft or MiniMapHitZone.ResizeTopRight)
+                heightChange = -deltaY;
+
+            double sizeDelta = Math.Abs(widthChange) > Math.Abs(heightChange) ? widthChange : heightChange;
+            double scaleFactor = 1.0 - (sizeDelta / 80.0);
+            double targetZoom = Math.Clamp(_miniMapResizeStartZoom * scaleFactor, 0.1, 4.0);
+
+            Point centerViewport = new Point(ChartScrollViewer.ViewportWidth / 2.0, ChartScrollViewer.ViewportHeight / 2.0);
+            ZoomAtPoint(targetZoom, centerViewport);
+            e.Handled = true;
+            return;
+        }
+
         if (_isMiniMapDragging)
         {
-            ScrollFromMiniMapPos(e.GetPosition(MiniMapCanvas), _miniMapDragGrabOffset);
+            ScrollFromMiniMapPos(currentPos, _miniMapDragGrabOffset, smooth: false);
             e.Handled = true;
+            return;
         }
+
+        UpdateMiniMapCursor(currentPos);
     }
 
     private void MiniMapCanvas_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_isMiniMapResizing)
+        {
+            _isMiniMapResizing = false;
+            _activeMiniMapResizeZone = MiniMapHitZone.None;
+            MiniMapCanvas.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_isMiniMapDragging)
         {
             _isMiniMapDragging = false;
@@ -1145,7 +1313,7 @@ public partial class OrgChartView : UserControl
         e.Handled = true;
     }
 
-    private void ScrollFromMiniMapPos(Point mapPos, Point grabOffset)
+    private void ScrollFromMiniMapPos(Point mapPos, Point grabOffset, bool smooth = false)
     {
         if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0 || MiniMapCanvas == null) return;
 
@@ -1170,8 +1338,55 @@ public partial class OrgChartView : UserControl
         double targetHOffset = (unscaledTargetX * zoom) - (ChartScrollViewer.ViewportWidth / 2.0);
         double targetVOffset = (unscaledTargetY * zoom) - (ChartScrollViewer.ViewportHeight / 2.0);
 
-        ChartScrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetHOffset));
-        ChartScrollViewer.ScrollToVerticalOffset(Math.Max(0, targetVOffset));
+        AnimateScrollTo(targetHOffset, targetVOffset, smooth);
+    }
+
+    private void AnimateScrollTo(double targetH, double targetV, bool smooth = true)
+    {
+        double maxH = Math.Max(0, ChartScrollViewer.ScrollableWidth);
+        double maxV = Math.Max(0, ChartScrollViewer.ScrollableHeight);
+        double clampedH = Math.Clamp(targetH, 0, maxH);
+        double clampedV = Math.Clamp(targetV, 0, maxV);
+
+        if (!smooth)
+        {
+            _scrollAnimTimer?.Stop();
+            _scrollAnimTimer = null;
+            ChartScrollViewer.ScrollToHorizontalOffset(clampedH);
+            ChartScrollViewer.ScrollToVerticalOffset(clampedV);
+            return;
+        }
+
+        _scrollAnimTimer?.Stop();
+        _scrollAnimStart = new Point(ChartScrollViewer.HorizontalOffset, ChartScrollViewer.VerticalOffset);
+        _scrollAnimTarget = new Point(clampedH, clampedV);
+        _scrollAnimStartTime = DateTime.Now;
+
+        _scrollAnimTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+
+        _scrollAnimTimer.Tick += (_, _) =>
+        {
+            double elapsed = (DateTime.Now - _scrollAnimStartTime).TotalMilliseconds;
+            double progress = Math.Clamp(elapsed / ScrollAnimDurationMs, 0.0, 1.0);
+            double ease = 1.0 - Math.Pow(1.0 - progress, 3);
+
+            double currentH = _scrollAnimStart.X + (_scrollAnimTarget.X - _scrollAnimStart.X) * ease;
+            double currentV = _scrollAnimStart.Y + (_scrollAnimTarget.Y - _scrollAnimStart.Y) * ease;
+
+            ChartScrollViewer.ScrollToHorizontalOffset(currentH);
+            ChartScrollViewer.ScrollToVerticalOffset(currentV);
+
+            if (progress >= 1.0)
+            {
+                _scrollAnimTimer?.Stop();
+                _scrollAnimTimer = null;
+            }
+        };
+
+        _scrollAnimTimer.Start();
     }
 
     private void ToggleMiniMapSize_Click(object sender, RoutedEventArgs e)
