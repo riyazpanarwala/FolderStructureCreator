@@ -611,7 +611,14 @@ public class MainViewModel : ViewModelBase
         if (SelectedStructureNode is null) return;
         var parent = SelectedStructureNode.Parent;
         var folderName = "New Folder";
-        string? targetParentPath = parent?.RealPath ?? (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
+        string? targetParentPath = parent != null
+            ? (parent.RealPath ?? (IsLiveSyncMode && TargetPathExists ? ComputeNodePathRelativeToTarget(parent, TargetPath) : null))
+            : (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
+
+        if (parent != null && string.IsNullOrEmpty(parent.RealPath) && !string.IsNullOrEmpty(targetParentPath))
+        {
+            parent.RealPath = targetParentPath;
+        }
 
         if (IsLiveSyncMode && !string.IsNullOrEmpty(targetParentPath))
         {
@@ -662,7 +669,14 @@ public class MainViewModel : ViewModelBase
 
         // Files aren't valid parents - fall back to adding as new roots instead of under a file.
         var targetParent = SelectedStructureNode is { IsFile: false } ? SelectedStructureNode : null;
-        string? targetParentPath = targetParent?.RealPath ?? (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
+        string? targetParentPath = targetParent != null
+            ? (targetParent.RealPath ?? (IsLiveSyncMode && TargetPathExists ? ComputeNodePathRelativeToTarget(targetParent, TargetPath) : null))
+            : (IsLiveSyncMode && TargetPathExists ? TargetPath : null);
+
+        if (targetParent != null && string.IsNullOrEmpty(targetParent.RealPath) && !string.IsNullOrEmpty(targetParentPath))
+        {
+            targetParent.RealPath = targetParentPath;
+        }
 
         FolderNode? lastAdded = null;
         foreach (var name in names)
@@ -683,6 +697,10 @@ public class MainViewModel : ViewModelBase
                         RootFolders.Add(node);
                     }
                     lastAdded = node;
+                }
+                else
+                {
+                    StatusMessage = $"Could not create folder \"{name}\" on disk: {result.Error}";
                 }
             }
             else
@@ -765,7 +783,7 @@ public class MainViewModel : ViewModelBase
 
         if (IsLiveSyncMode && !string.IsNullOrEmpty(node.RealPath))
         {
-            if (string.Equals(node.Name, trimmed, StringComparison.OrdinalIgnoreCase)) return;
+            if (string.Equals(node.Name, trimmed, StringComparison.Ordinal)) return;
 
             var result = FileSystemService.RenameFolderOnDisk(node.RealPath, trimmed);
             if (result.Success)
@@ -809,9 +827,12 @@ public class MainViewModel : ViewModelBase
             current = current.Parent;
         }
 
-        if (IsLiveSyncMode && !string.IsNullOrEmpty(sourceNode.RealPath) && !string.IsNullOrEmpty(targetParent.RealPath))
+        string? sourceRealPath = sourceNode.RealPath ?? (IsLiveSyncMode && TargetPathExists ? ComputeNodePathRelativeToTarget(sourceNode, TargetPath) : null);
+        string? targetParentRealPath = targetParent.RealPath ?? (IsLiveSyncMode && TargetPathExists ? ComputeNodePathRelativeToTarget(targetParent, TargetPath) : null);
+
+        if (IsLiveSyncMode && !string.IsNullOrEmpty(sourceRealPath) && !string.IsNullOrEmpty(targetParentRealPath))
         {
-            var result = FileSystemService.MoveFolderOnDisk(sourceNode.RealPath, targetParent.RealPath);
+            var result = FileSystemService.MoveFolderOnDisk(sourceRealPath, targetParentRealPath);
             if (!result.Success)
             {
                 StatusMessage = $"Could not move folder on computer disk: {result.Error}";
@@ -828,6 +849,7 @@ public class MainViewModel : ViewModelBase
             targetParent.Children.Add(sourceNode);
             targetParent.IsExpanded = true;
             sourceNode.UpdateRealPaths(result.NewPath);
+            targetParent.RealPath = targetParentRealPath;
 
             StatusMessage = $"Moved folder on computer disk to \"{result.NewPath}\"";
             SelectedTargetNode?.Refresh();
@@ -1109,7 +1131,7 @@ public class MainViewModel : ViewModelBase
 
     private bool CanCreateStructure() => TargetPathExists && RootFolders.Count > 0;
 
-    private void CreateStructure()
+    private async void CreateStructure()
     {
         if (!CanCreateStructure())
         {
@@ -1119,13 +1141,17 @@ public class MainViewModel : ViewModelBase
             return;
         }
 
-        var result = FileSystemService.CreateStructure(RootFolders, TargetPath);
+        StatusMessage = "Creating folder structure on disk…";
+        var rootSnapshot = RootFolders.ToList();
+        var targetSnapshot = TargetPath;
+
+        var result = await Task.Run(() => FileSystemService.CreateStructure(rootSnapshot, targetSnapshot));
 
         if (result.Success)
         {
             StatusMessage = $"Done: {result.CreatedCount} folder(s) created" +
                              (result.AlreadyExistedCount > 0 ? $", {result.AlreadyExistedCount} already existed" : "") +
-                             $" under \"{TargetPath}\".";
+                             $" under \"{targetSnapshot}\".";
         }
         else
         {

@@ -80,11 +80,20 @@ public class FileSystemNode : INotifyPropertyChanged
     public void RefreshRecursive()
     {
         if (!_childrenLoaded) return;
+        var expandedPaths = Children.Where(c => !c.IsPlaceholder && c.IsExpanded)
+                                    .Select(c => c.FullPath)
+                                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         _childrenLoaded = false;
         EnsureChildrenLoaded();
+
         foreach (var child in Children.Where(c => !c.IsPlaceholder).ToList())
         {
-            child.RefreshRecursive();
+            if (expandedPaths.Contains(child.FullPath))
+            {
+                child.IsExpanded = true;
+                child.RefreshRecursive();
+            }
         }
     }
 

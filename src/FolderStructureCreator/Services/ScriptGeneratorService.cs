@@ -75,7 +75,7 @@ public static class ScriptGeneratorService
         sb.AppendLine("foreach ($relPath in $folders) {");
         sb.AppendLine("    $fullPath = Join-Path $Target $relPath");
         sb.AppendLine("    if (-not (Test-Path -LiteralPath $fullPath)) {");
-        sb.AppendLine("        New-Item -ItemType Directory -Path $fullPath -Force | Out-Null");
+        sb.AppendLine("        New-Item -ItemType Directory -LiteralPath $fullPath -Force | Out-Null");
         sb.AppendLine("        $createdCount++");
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -110,7 +110,7 @@ public static class ScriptGeneratorService
 
         foreach (var relPath in relativePaths)
         {
-            string winPath = relPath.Replace('/', '\\');
+            string winPath = relPath.Replace("%", "%%").Replace("\"", "").Replace('/', '\\');
             sb.AppendLine($"mkdir \"%TARGET_DIR%\\{winPath}\" 2>nul");
         }
 
@@ -142,7 +142,10 @@ public static class ScriptGeneratorService
 
         foreach (var relPath in relativePaths)
         {
-            string escaped = relPath.Replace("\"", "\\\"");
+            string escaped = relPath.Replace("\\", "\\\\")
+                                    .Replace("\"", "\\\"")
+                                    .Replace("$", "\\$")
+                                    .Replace("`", "\\`");
             sb.Append($"mkdir -p \"${{TARGET_DIR}}/{escaped}\"\n");
         }
 

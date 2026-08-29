@@ -206,11 +206,11 @@ public static class FileSystemService
             ignoreRules = IgnoreRuleService.CreateForSource(sourcePath, includeBuiltInDefaults: true);
         }
 
-        result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result, ignoreRules);
+        result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result, ignoreRules, sourcePath);
         return result;
     }
 
-    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result, IgnoreRuleService? ignoreRules)
+    private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result, IgnoreRuleService? ignoreRules, string rootSourcePath)
     {
         var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
         if (string.IsNullOrEmpty(name)) name = sourcePath; // e.g. a drive root like "D:\"
@@ -230,7 +230,8 @@ public static class FileSystemService
         foreach (var subDir in subDirs)
         {
             var subDirName = Path.GetFileName(subDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (ignoreRules != null && ignoreRules.IsIgnored(subDirName))
+            var relativePath = Path.GetRelativePath(rootSourcePath, subDir);
+            if (ignoreRules != null && ignoreRules.IsIgnored(subDirName, relativePath))
             {
                 result.IgnoredCount++;
                 continue;
@@ -242,7 +243,7 @@ public static class FileSystemService
                 break;
             }
 
-            var child = BuildRecursive(subDir, node, depth + 1, maxTotalNodes, result, ignoreRules);
+            var child = BuildRecursive(subDir, node, depth + 1, maxTotalNodes, result, ignoreRules, rootSourcePath);
             node.Children.Add(child);
         }
 
@@ -264,15 +265,26 @@ public static class FileSystemService
             var safeName = SanitizeFolderName(newName);
             var newPath = Path.Combine(parent, safeName);
 
-            if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(oldPath, newPath, StringComparison.Ordinal))
                 return (true, oldPath, string.Empty);
 
-            if (Directory.Exists(newPath))
+            bool isCaseOnlyRename = string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase);
+
+            if (!isCaseOnlyRename && Directory.Exists(newPath))
                 return (false, oldPath, $"A folder named \"{safeName}\" already exists in the destination.");
 
             if (Directory.Exists(oldPath))
             {
-                Directory.Move(oldPath, newPath);
+                if (isCaseOnlyRename)
+                {
+                    var tempPath = Path.Combine(parent, $"__temp_rename_{Guid.NewGuid():N}");
+                    Directory.Move(oldPath, tempPath);
+                    Directory.Move(tempPath, newPath);
+                }
+                else
+                {
+                    Directory.Move(oldPath, newPath);
+                }
                 return (true, newPath, string.Empty);
             }
             else if (Directory.Exists(parent))
@@ -296,8 +308,8 @@ public static class FileSystemService
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(parentPath) || !Directory.Exists(parentPath))
-                return (false, string.Empty, "Parent target path does not exist on disk.");
+            if (string.IsNullOrWhiteSpace(parentPath))
+                return (false, string.Empty, "Parent target path is empty.");
 
             var safeName = SanitizeFolderName(folderName);
             var newPath = Path.Combine(parentPath, safeName);

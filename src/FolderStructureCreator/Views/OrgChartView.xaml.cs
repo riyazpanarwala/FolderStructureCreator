@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Security;
+using System.Globalization;
 
 namespace FolderStructureCreator.Views;
 
@@ -1626,7 +1627,7 @@ public partial class OrgChartView : UserControl
 
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-        sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:F1}\" height=\"{height:F1}\" viewBox=\"0 0 {width:F1} {height:F1}\">");
+        sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{height.ToString("F1", CultureInfo.InvariantCulture)}\" viewBox=\"0 0 {width.ToString("F1", CultureInfo.InvariantCulture)} {height.ToString("F1", CultureInfo.InvariantCulture)}\">");
         sb.AppendLine("  <!-- Background -->");
         sb.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#0F172A\"/>");
         sb.AppendLine("  <!-- Connectors -->");
@@ -1647,12 +1648,12 @@ public partial class OrgChartView : UserControl
                 if (isVertical)
                 {
                     double midY = (py + cy) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {px:F1},{py:F1} L {px:F1},{midY:F1} L {cx:F1},{midY:F1} L {cx:F1},{cy:F1}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                    sb.AppendLine($"  <path d=\"M {px.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {px.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                 }
                 else
                 {
                     double midX = (px + cx) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {px:F1},{py:F1} L {midX:F1},{py:F1} L {midX:F1},{cy:F1} L {cx:F1},{cy:F1}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                    sb.AppendLine($"  <path d=\"M {px.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                 }
 
                 DrawSvgConnectors(child);
@@ -1690,8 +1691,8 @@ public partial class OrgChartView : UserControl
             string escapedName = SecurityElement.Escape(node.Name) ?? string.Empty;
 
             sb.AppendLine("  <g>");
-            sb.AppendLine($"    <rect x=\"{boxX:F1}\" y=\"{boxY:F1}\" width=\"{BoxWidth}\" height=\"{BoxHeight}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth:F1}\"/>");
-            sb.AppendLine($"    <text x=\"{boxX + BoxWidth / 2.0:F1}\" y=\"{boxY + BoxHeight / 2.0 + 4:F1}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
+            sb.AppendLine($"    <rect x=\"{boxX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{boxY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{BoxWidth}\" height=\"{BoxHeight}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth.ToString("F1", CultureInfo.InvariantCulture)}\"/>");
+            sb.AppendLine($"    <text x=\"{(boxX + BoxWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(boxY + BoxHeight / 2.0 + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
             sb.AppendLine("  </g>");
         }
 
@@ -1730,6 +1731,7 @@ public partial class OrgChartView : UserControl
 
         void RecordObj()
         {
+            writer.Flush();
             fileStream.Flush();
             offsets.Add(fileStream.Position);
         }
@@ -1748,7 +1750,7 @@ public partial class OrgChartView : UserControl
 
         // Obj 3: Page
         RecordObj();
-        writer.Write($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {widthPt:F2} {heightPt:F2}] /Resources << /XObject << /Img1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
+        writer.Write($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {widthPt.ToString("F2", CultureInfo.InvariantCulture)} {heightPt.ToString("F2", CultureInfo.InvariantCulture)}] /Resources << /XObject << /Img1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
         writer.Flush();
 
         // Obj 4: Image XObject
@@ -1760,7 +1762,7 @@ public partial class OrgChartView : UserControl
         writer.Flush();
 
         // Obj 5: Page Content Stream
-        string contentStream = $"q\n{widthPt:F2} 0 0 {heightPt:F2} 0 0 cm\n/Img1 Do\nQ\n";
+        string contentStream = $"q\n{widthPt.ToString("F2", CultureInfo.InvariantCulture)} 0 0 {heightPt.ToString("F2", CultureInfo.InvariantCulture)} 0 0 cm\n/Img1 Do\nQ\n";
         byte[] contentBytes = Encoding.ASCII.GetBytes(contentStream);
 
         RecordObj();
