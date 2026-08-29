@@ -25,8 +25,7 @@
         <!-- Mini-Map Overlay Box (Bottom-Right Corner) -->
         <Border x:Name="MiniMapBorder" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16"
                 Background="#0F172A" BorderBrush="#334155" BorderThickness="1.5" CornerRadius="8"
-                Padding="6" Visibility="Visible" Opacity="0.6" Panel.ZIndex="900"
-                MouseEnter="MiniMap_MouseEnter" MouseLeave="MiniMap_MouseLeave">
+                Padding="6" Visibility="Visible" Opacity="1.0" Panel.ZIndex="900">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.4" Color="#000000"/>
             </Border.Effect>
@@ -46,7 +45,7 @@
                         <!-- Live Visual clone of main diagram canvas -->
                         <Rectangle x:Name="MiniMapVisualRect" Width="160" Height="110">
                             <Rectangle.Fill>
-                                <VisualBrush Visual="{Binding ElementName=RootCanvas}" ViewboxUnits="Absolute" Stretch="Uniform"/>
+                                <VisualBrush x:Name="MiniMapVisualBrush" Visual="{Binding ElementName=RootCanvas}" Stretch="Fill"/>
                             </Rectangle.Fill>
                         </Rectangle>
                         <!-- Viewfinder indicator representing current viewport -->

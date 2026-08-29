@@ -431,16 +431,27 @@ public partial class OrgChartView : UserControl
         const double siblingWidth = BoxWidth + 20; // X spacing per sibling column in vertical mode
         const double levelHeight = BoxHeight + 46; // Y spacing per depth level in vertical mode
 
-        if (isVertical)
+        double maxX = 0;
+        double maxY = 0;
+        foreach (var (node, pos) in positions)
         {
-            RootCanvas.Width = Math.Max(ChartPadding * 2 + nextRow * siblingWidth, 100);
-            RootCanvas.Height = Math.Max(ChartPadding * 2 + (maxDepth + 1) * levelHeight, 100);
+            double right, bottom;
+            if (isVertical)
+            {
+                right = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 + BoxWidth / 2.0;
+                bottom = ChartPadding + pos.Depth * levelHeight + BoxHeight;
+            }
+            else
+            {
+                right = ChartPadding + pos.Depth * (BoxWidth + ColumnGap) + BoxWidth;
+                bottom = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 + BoxHeight / 2.0;
+            }
+            if (right > maxX) maxX = right;
+            if (bottom > maxY) maxY = bottom;
         }
-        else
-        {
-            RootCanvas.Width = Math.Max(ChartPadding * 2 + (maxDepth + 1) * (BoxWidth + ColumnGap), 100);
-            RootCanvas.Height = Math.Max(ChartPadding * 2 + nextRow * RowHeight, 100);
-        }
+
+        RootCanvas.Width = Math.Max(maxX + ChartPadding, 100);
+        RootCanvas.Height = Math.Max(maxY + ChartPadding, 100);
 
         (double X, double Y) GetParentConnectionPoint(double row, int depth)
         {
@@ -932,17 +943,20 @@ public partial class OrgChartView : UserControl
 
         double canvasW = RootCanvas.Width;
         double canvasH = RootCanvas.Height;
+
+        if (MiniMapVisualBrush != null)
+        {
+            MiniMapVisualBrush.ViewboxUnits = BrushMappingMode.Absolute;
+            MiniMapVisualBrush.Viewbox = new Rect(0, 0, canvasW, canvasH);
+        }
+
         double mapW = MiniMapCanvas.Width > 0 ? MiniMapCanvas.Width : 160.0;
         double mapH = MiniMapCanvas.Height > 0 ? MiniMapCanvas.Height : 110.0;
 
-        double scale = Math.Min(mapW / canvasW, mapH / canvasH);
-        double previewW = canvasW * scale;
-        double previewH = canvasH * scale;
+        double scaleX = mapW / canvasW;
+        double scaleY = mapH / canvasH;
 
-        double offsetX = (mapW - previewW) / 2.0;
-        double offsetY = (mapH - previewH) / 2.0;
-
-        double zoom = ChartScale.ScaleX;
+        double zoom = Math.Max(0.001, ChartScale.ScaleX);
         double viewportW = ChartScrollViewer.ViewportWidth;
         double viewportH = ChartScrollViewer.ViewportHeight;
 
@@ -951,15 +965,16 @@ public partial class OrgChartView : UserControl
         double unscaledWidth = viewportW / zoom;
         double unscaledHeight = viewportH / zoom;
 
-        double rectLeft = offsetX + unscaledLeft * scale;
-        double rectTop = offsetY + unscaledTop * scale;
-        double rectWidth = unscaledWidth * scale;
-        double rectHeight = unscaledHeight * scale;
+        double rectLeft = unscaledLeft * scaleX;
+        double rectTop = unscaledTop * scaleY;
+        double rectWidth = unscaledWidth * scaleX;
+        double rectHeight = unscaledHeight * scaleY;
 
-        rectLeft = Math.Clamp(rectLeft, offsetX, offsetX + previewW);
-        rectTop = Math.Clamp(rectTop, offsetY, offsetY + previewH);
-        rectWidth = Math.Clamp(rectWidth, 8, mapW);
+        rectWidth = Math.Clamp(rectWidth, 12, mapW);
         rectHeight = Math.Clamp(rectHeight, 8, mapH);
+
+        rectLeft = Math.Clamp(rectLeft, 0, Math.Max(0, mapW - rectWidth));
+        rectTop = Math.Clamp(rectTop, 0, Math.Max(0, mapH - rectHeight));
 
         Canvas.SetLeft(MiniMapViewportRect, rectLeft);
         Canvas.SetTop(MiniMapViewportRect, rectTop);
@@ -997,12 +1012,6 @@ public partial class OrgChartView : UserControl
         {
             _isMiniMapDragging = false;
             MiniMapCanvas.ReleaseMouseCapture();
-
-            if (!MiniMapBorder.IsMouseOver)
-            {
-                MiniMapBorder.Opacity = 0.6;
-            }
-
             e.Handled = true;
         }
     }
@@ -1017,18 +1026,11 @@ public partial class OrgChartView : UserControl
         double mapW = MiniMapCanvas.Width > 0 ? MiniMapCanvas.Width : 160.0;
         double mapH = MiniMapCanvas.Height > 0 ? MiniMapCanvas.Height : 110.0;
 
-        double scale = Math.Min(mapW / canvasW, mapH / canvasH);
-        double previewW = canvasW * scale;
-        double previewH = canvasH * scale;
+        double scaleX = mapW / canvasW;
+        double scaleY = mapH / canvasH;
 
-        double offsetX = (mapW - previewW) / 2.0;
-        double offsetY = (mapH - previewH) / 2.0;
-
-        double clickX = mapPos.X - offsetX;
-        double clickY = mapPos.Y - offsetY;
-
-        double unscaledTargetX = clickX / scale;
-        double unscaledTargetY = clickY / scale;
+        double unscaledTargetX = mapPos.X / scaleX;
+        double unscaledTargetY = mapPos.Y / scaleY;
 
         double zoom = ChartScale.ScaleX;
         double targetHOffset = (unscaledTargetX * zoom) - (ChartScrollViewer.ViewportWidth / 2.0);
@@ -1077,22 +1079,6 @@ public partial class OrgChartView : UserControl
     {
         FitToView();
         e.Handled = true;
-    }
-
-    private void MiniMap_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (MiniMapBorder != null)
-        {
-            MiniMapBorder.Opacity = 1.0;
-        }
-    }
-
-    private void MiniMap_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (MiniMapBorder != null && !_isMiniMapDragging)
-        {
-            MiniMapBorder.Opacity = 0.6;
-        }
     }
 
     private void CloseMiniMap_Click(object sender, RoutedEventArgs e)
