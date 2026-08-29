@@ -10,6 +10,7 @@ public class IgnoreRuleService
 {
     private static readonly string[] DefaultIgnorePatterns = new[]
     {
+        // Software & IDE defaults
         ".git",
         ".vs",
         ".vscode",
@@ -23,7 +24,16 @@ public class IgnoreRuleService
         "__pycache__",
         ".pytest_cache",
         ".DS_Store",
-        "Thumbs.db"
+        "Thumbs.db",
+
+        // SolidWorks & CAD defaults
+        "swbackup",
+        "SWBackup",
+        "AutoRecover",
+        "SolidWorks AutoRecover",
+        "simulation_results",
+        "sldtemp",
+        "SolidWorksTemp"
     };
 
     private readonly List<Regex> _compiledPatterns = new();
