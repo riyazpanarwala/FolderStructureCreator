@@ -271,6 +271,69 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    public event Action? RequestExportScript;
+
+    // ---- Point 8: Command Palette (Ctrl + K) ----
+    private bool _isCommandPaletteOpen;
+    public bool IsCommandPaletteOpen
+    {
+        get => _isCommandPaletteOpen;
+        set => SetField(ref _isCommandPaletteOpen, value);
+    }
+
+    private string _commandPaletteQuery = string.Empty;
+    public string CommandPaletteQuery
+    {
+        get => _commandPaletteQuery;
+        set
+        {
+            if (SetField(ref _commandPaletteQuery, value))
+                ApplyCommandPaletteFilter();
+        }
+    }
+
+    public ObservableCollection<CommandItem> AllCommands { get; } = new();
+    public ObservableCollection<CommandItem> FilteredCommands { get; } = new();
+
+    private CommandItem? _selectedCommandPaletteItem;
+    public CommandItem? SelectedCommandPaletteItem
+    {
+        get => _selectedCommandPaletteItem;
+        set => SetField(ref _selectedCommandPaletteItem, value);
+    }
+
+    private void ApplyCommandPaletteFilter()
+    {
+        FilteredCommands.Clear();
+        var q = CommandPaletteQuery.Trim();
+        var matches = string.IsNullOrWhiteSpace(q)
+            ? AllCommands
+            : AllCommands.Where(c => c.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                                     c.Category.Contains(q, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var m in matches)
+            FilteredCommands.Add(m);
+
+        SelectedCommandPaletteItem = FilteredCommands.FirstOrDefault();
+    }
+
+    public void ExecuteCommandPaletteItem(CommandItem? item)
+    {
+        if (item == null) return;
+        IsCommandPaletteOpen = false;
+        if (item.Command.CanExecute(item.CommandParameter))
+        {
+            item.Command.Execute(item.CommandParameter);
+        }
+    }
+
+    public void OpenCommandPalette()
+    {
+        CommandPaletteQuery = string.Empty;
+        ApplyCommandPaletteFilter();
+        IsCommandPaletteOpen = true;
+    }
+
     // ---- Commands ----
     public RelayCommand AddRootFolderCommand { get; }
     public RelayCommand AddChildFolderCommand { get; }
@@ -301,6 +364,10 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
     public RelayCommand SetThemeCommand { get; }
+    public RelayCommand ToggleCommandPaletteCommand { get; }
+    public RelayCommand OpenCommandPaletteCommand { get; }
+    public RelayCommand CloseCommandPaletteCommand { get; }
+    public RelayCommand ExecuteCommandPaletteItemCommand { get; }
 
     public MainViewModel()
     {
@@ -362,6 +429,13 @@ public class MainViewModel : ViewModelBase
             else if (param is string s && Enum.TryParse<AppTheme>(s, out var parsedTheme))
                 SelectedTheme = parsedTheme;
         });
+
+        ToggleCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = !IsCommandPaletteOpen);
+        OpenCommandPaletteCommand = new RelayCommand(_ => OpenCommandPalette());
+        CloseCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = false);
+        ExecuteCommandPaletteItemCommand = new RelayCommand(param => ExecuteCommandPaletteItem(param as CommandItem ?? SelectedCommandPaletteItem));
+
+        InitializeCommandPaletteRegistry();
 
         ThemeService.ThemeChanged += _ =>
         {
@@ -1201,5 +1275,35 @@ public class MainViewModel : ViewModelBase
             liveMatch.IsExpanded = true; // triggers lazy load of this level
             ExpandCreatedTree(liveMatch, blueprintNode.Children);
         }
+    }
+
+    private void InitializeCommandPaletteRegistry()
+    {
+        AllCommands.Clear();
+        // Plan & Blueprint Actions
+        AllCommands.Add(new CommandItem("Add Root Folder", "Blueprint", "➕", AddRootFolderCommand, "Ctrl+N"));
+        AllCommands.Add(new CommandItem("Import Reference Folder", "Blueprint", "📥", ImportFromReferenceCommand, "Ctrl+I"));
+        AllCommands.Add(new CommandItem("Export Standalone Script (.ps1, .bat, .sh)", "Export", "📜", new RelayCommand(_ => RequestExportScript?.Invoke())));
+        AllCommands.Add(new CommandItem("Clear Blueprint Plan", "Blueprint", "🗑️", ClearPlanCommand));
+
+        // Views & Layout
+        AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "🌲", ShowTreeViewCommand));
+        AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "📊", ShowOrgChartViewCommand));
+        AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "➡️", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Toggle Destination Sidebar", "Workspace", "📐", ToggleDestinationSidebarCommand));
+
+        // Themes
+        AllCommands.Add(new CommandItem("Switch Theme: Dark Mode", "Appearance", "🌙", SetThemeCommand, commandParameter: AppTheme.Dark));
+        AllCommands.Add(new CommandItem("Switch Theme: Light Mode", "Appearance", "☀️", SetThemeCommand, commandParameter: AppTheme.Light));
+        AllCommands.Add(new CommandItem("Switch Theme: High Contrast Mode", "Appearance", "🔲", SetThemeCommand, commandParameter: AppTheme.HighContrast));
+        AllCommands.Add(new CommandItem("Switch Theme: Windows System Match", "Appearance", "💻", SetThemeCommand, commandParameter: AppTheme.System));
+
+        // Options
+        AllCommands.Add(new CommandItem("Toggle Live Computer Sync Mode", "Options", "🔄", new RelayCommand(_ => IsLiveSyncMode = !IsLiveSyncMode)));
+        AllCommands.Add(new CommandItem("Toggle Smart Ignore Rules (.structureignore)", "Options", "🚫", new RelayCommand(_ => EnableIgnoreRules = !EnableIgnoreRules)));
+        AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Browser", "🔀", ToggleSortOrderCommand));
+        AllCommands.Add(new CommandItem("Refresh Real Computer Drives", "Browser", "🔄", RefreshDrivesCommand));
+
+        ApplyCommandPaletteFilter();
     }
 }

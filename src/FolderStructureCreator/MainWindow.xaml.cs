@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         OrgChartHost.DeleteRequested += node => ViewModel.DeleteNodeCommand.Execute(null);
         OrgChartHost.ZoomLevelChanged += zoom => UpdateZoomPercentageDisplay(zoom);
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
+        ViewModel.RequestExportScript += () => ExportScript_Click(this, new RoutedEventArgs());
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         KeyDown += Window_KeyDown;
@@ -421,5 +422,51 @@ public partial class MainWindow : Window
             current = VisualTreeHelper.GetParent(current);
         }
         return null;
+    }
+
+    private void CommandPaletteOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource == CommandPaletteOverlay)
+        {
+            ViewModel.IsCommandPaletteOpen = false;
+        }
+    }
+
+    private void CommandPaletteSearchInput_Loaded(object sender, RoutedEventArgs e)
+    {
+        CommandPaletteSearchInput.Focus();
+        CommandPaletteSearchInput.SelectAll();
+    }
+
+    private void CommandPaletteSearchInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            ViewModel.IsCommandPaletteOpen = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            ViewModel.ExecuteCommandPaletteItem(ViewModel.SelectedCommandPaletteItem);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key is Key.Down or Key.Up)
+        {
+            var count = ViewModel.FilteredCommands.Count;
+            if (count == 0) return;
+
+            var currentIndex = ViewModel.SelectedCommandPaletteItem != null ? ViewModel.FilteredCommands.IndexOf(ViewModel.SelectedCommandPaletteItem) : 0;
+            if (e.Key == Key.Down)
+                currentIndex = (currentIndex + 1) % count;
+            else
+                currentIndex = (currentIndex - 1 + count) % count;
+
+            ViewModel.SelectedCommandPaletteItem = ViewModel.FilteredCommands[currentIndex];
+            e.Handled = true;
+        }
     }
 }

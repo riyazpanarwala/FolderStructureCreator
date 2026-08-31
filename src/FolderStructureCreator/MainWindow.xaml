@@ -16,6 +16,9 @@
         AllowDrop="True"
         DragOver="Window_DragOver"
         Drop="Window_Drop">
+    <Window.InputBindings>
+        <KeyBinding Key="K" Modifiers="Ctrl" Command="{Binding OpenCommandPaletteCommand}"/>
+    </Window.InputBindings>
     <Window.Resources>
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <conv:BoolToGridLengthConverter x:Key="BoolToGridLength"/>
@@ -34,6 +37,8 @@
                 <TextBlock Text="Design a reusable folder plan, then create it in a target destination." Style="{StaticResource SubText}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="⚡ Command Palette (Ctrl+K)" Style="{StaticResource ToolButton}" Command="{Binding OpenCommandPaletteCommand}" ToolTip="Open spotlight command palette (Ctrl + K)" Margin="0,0,12,0"/>
+
                 <!-- Theme Selector Dropdown -->
                 <ComboBox SelectedValue="{Binding SelectedTheme}" SelectedValuePath="Tag" Width="140" Margin="0,0,14,0" VerticalAlignment="Center" ToolTip="Select Application Theme">
                     <ComboBoxItem Content="🌙 Dark" Tag="{x:Static services:AppTheme.Dark}"/>
@@ -384,6 +389,89 @@
                     </StackPanel>
                 </Button>
             </Grid>
+        </Border>
+
+        <!-- Spotlight Command Palette (Ctrl + K) Overlay -->
+        <Border x:Name="CommandPaletteOverlay"
+                Grid.RowSpan="3"
+                Background="#90000000"
+                Visibility="{Binding IsCommandPaletteOpen, Converter={StaticResource BoolToVis}}"
+                Panel.ZIndex="5000"
+                MouseDown="CommandPaletteOverlay_MouseDown">
+            <Border Width="580"
+                    MaxHeight="440"
+                    VerticalAlignment="Top"
+                    Margin="0,80,0,0"
+                    Background="{DynamicResource BrushPanel}"
+                    BorderBrush="{DynamicResource BrushAccent}"
+                    BorderThickness="1.5"
+                    CornerRadius="10">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.5" Color="#000000"/>
+                </Border.Effect>
+                <DockPanel Margin="14">
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="⚡" FontSize="16" Foreground="{DynamicResource BrushAccent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox x:Name="CommandPaletteSearchInput"
+                                 Grid.Column="1"
+                                 Text="{Binding CommandPaletteQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Type a command or feature... (e.g. Dark, Export, Tree, Analytics)"
+                                 FontSize="13.5"
+                                 Padding="10,8"
+                                 KeyDown="CommandPaletteSearchInput_KeyDown"
+                                 Loaded="CommandPaletteSearchInput_Loaded"/>
+                        <Border Grid.Column="2" Background="{DynamicResource BrushAccentSoft}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="ESC" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource BrushAccent}"/>
+                        </Border>
+                    </Grid>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding FilteredCommands}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border x:Name="CmdItemBorder" Margin="0,2" Padding="10,8" Background="Transparent" CornerRadius="6" Cursor="Hand">
+                                        <Border.InputBindings>
+                                            <MouseBinding MouseAction="LeftClick"
+                                                          Command="{Binding DataContext.ExecuteCommandPaletteItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          CommandParameter="{Binding}"/>
+                                        </Border.InputBindings>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Icon}" FontSize="15" Foreground="{DynamicResource BrushAccent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
+                                                <TextBlock Text="{Binding Category}" FontSize="10.5" Foreground="{DynamicResource BrushTextSecondary}"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="2"
+                                                    Background="{DynamicResource BrushAccentSoft}"
+                                                    CornerRadius="4"
+                                                    Padding="6,2"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding ShortcutHint, Converter={StaticResource InverseBoolToVis}}">
+                                                <TextBlock Text="{Binding ShortcutHint}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushAccent}"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="CmdItemBorder" Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
+                                        </Trigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>
