@@ -492,20 +492,33 @@ public partial class OrgChartView : UserControl
 
             Brush boxBackground = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
             Brush boxBorderBrush = isSelected ? SelectedBrush : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
+            Brush textForeground = new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A)); // Dark Slate for high contrast on light pastel boxes
+            Brush badgeForeground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69));
 
             if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
-                boxBackground = new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B)); // Dark Emerald
+                boxBackground = new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));  // Soft Emerald Light
+                textForeground = new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46)); // Dark Emerald Text
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0x04, 0x78, 0x57));
             }
             else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)); // Slate Neutral
+                boxBackground = new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));  // Light Slate Neutral
+                textForeground = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)); // Dark Slate Text
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69));
             }
             else if (node.DiffStatus == NodeDiffStatus.ExtraOnDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
-                boxBackground = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F)); // Dark Amber
+                boxBackground = new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));  // Soft Amber Light
+                textForeground = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F)); // Dark Amber Text
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0xB4, 0x53, 0x09));
+            }
+            else if (isMatch)
+            {
+                textForeground = new SolidColorBrush(Color.FromRgb(0x85, 0x4D, 0x0E)); // Dark Gold Text for Search Match
             }
 
             var boxStack = new StackPanel
@@ -519,7 +532,7 @@ public partial class OrgChartView : UserControl
                 Text = node.Name,
                 FontSize = 11.5,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
+                Foreground = textForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(4, 0, 4, 0)
@@ -532,7 +545,7 @@ public partial class OrgChartView : UserControl
                     Text = node.DiffBadgeText,
                     FontSize = 9.5,
                     FontWeight = FontWeights.Bold,
-                    Foreground = node.DiffStatus == NodeDiffStatus.MissingOnDisk ? new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)) : new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)),
+                    Foreground = badgeForeground,
                     TextAlignment = TextAlignment.Center,
                     Margin = new Thickness(0, 2, 0, 0)
                 });
