@@ -1,10 +1,33 @@
 # Folder Structure Creator (WPF)
 
-A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse your Windows folder directory, visually design nested folder blueprints (manually or imported from reference folders), and build/sync them to disk in one click — with support for both an interactive indented **Tree View** and a visual dendrogram **Org Chart Diagram**.
+A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse your Windows folder directory, visually design nested folder blueprints (manually or imported from reference folders), and build/sync them to disk in one click — with support for an interactive indented **Tree View**, a visual dendrogram **Org Chart Diagram**, a **Spotlight Command Palette (`Ctrl+K`)**, a **Blueprint vs. Disk Visual Diff Engine**, and a complete **Dark / Light / High Contrast / System Sync Theme System**.
 
 ---
 
 ## 🌟 Key Features
+
+### 🎨 Theme System (Dark, Light, High Contrast, & System Sync)
+- **4 Theme Modes** — Switch seamlessly between 🌙 **Dark**, ☀️ **Light**, 🔲 **High Contrast**, and 💻 **System Match** (automatically detects Windows OS dark/light registry settings `AppsUseLightTheme` and `SystemParameters.HighContrast`).
+- **Persistent Preferences** — Saves your theme choice automatically to `%APPDATA%/FolderStructureCreator/settings.json`.
+- **High-Contrast Canvas & Diagram Palette** — High-contrast WCAG AAA compliant typography and box rendering across all themes.
+
+### ⚡ Spotlight Command Palette (`Ctrl + K`)
+- **Keyboard Spotlight Overlay** — Press `Ctrl + K` anywhere in the app (or click `⚡ Command Palette (Ctrl+K)` on the top toolbar) to open a spotlight command search bar over the app.
+- **Fuzzy Search Across App Features** — Search and execute any command in 1 second:
+  - *"Dark" / "Light"* ➔ Switch Application Themes
+  - *"Diff"* ➔ Compare Blueprint against Physical Disk
+  - *"Export"* ➔ Export Standalone Scripts or Diagram Images
+  - *"Tree" / "Chart"* ➔ Toggle View Modes
+  - *"Sync"* ➔ Toggle Live Computer Sync Mode
+- **Keyboard Execution** — Use `Up` / `Down` arrow keys to navigate filtered actions and press `Enter` to run. Dismiss with `Esc`.
+
+### 🔍 Blueprint vs. Disk Visual Diff & Sync
+- **Target Folder Comparison** — Compare your designed blueprint plan against an existing physical target folder on disk in one click (**🔍 Diff vs Disk**).
+- **Color-Coded Status Badges**:
+  - 🟢 **`[+ MISSING]`** — Exists in your Blueprint, but **NOT** on physical disk (Emerald Green).
+  - ⚪ **`[✓ MATCH]`** — Exists in **BOTH** your Blueprint and physical disk (Slate Neutral).
+  - 🟠 **`[⚡ EXTRA]`** — Exists on **disk**, but is **NOT** in your Blueprint (Amber/Orange).
+- **Incremental Creation** — Click **`🟢 Create Missing Only`** to create missing blueprint folders on disk without modifying or overwriting existing files.
 
 ### 🛠️ Building & Designing the Blueprint Plan
 - **+ Add Root Folder** — Create top-level root folders to start building a structure plan from scratch.
@@ -90,22 +113,30 @@ release.ps1                       1-Click PowerShell script to tag & push a new 
   release.yml                     GitHub Actions CI/CD workflow for automated releases
 src/FolderStructureCreator/
   App.xaml / App.xaml.cs          Application startup & global exception handling
-  MainWindow.xaml / .xaml.cs      Main WPF UI layout, search popup, drag-and-drop & commands
+  MainWindow.xaml / .xaml.cs      Main WPF UI layout, search popup, Command Palette, drag-and-drop & commands
   AppIcon.ico                     App icon (executable icon & title bar icon)
   Models/
     FolderNode.cs                 Blueprint folder model (Tree & Org Chart data structure)
     FileSystemNode.cs             Real computer directory node (lazy-loaded browser)
     PinnedFolder.cs               Pinned quick-access folder model
+    CommandItem.cs                Spotlight Command Palette item model
+    NodeDiffStatus.cs             Diff status enum (MissingOnDisk, MatchesDisk, ExtraOnDisk)
+  Themes/
+    DarkTheme.xaml                Dark teal-slate color palette dictionary
+    LightTheme.xaml               Light crisp-white color palette dictionary
+    HighContrastTheme.xaml        High Contrast accessibility color palette dictionary
   Views/
     OrgChartView.xaml(.cs)        Custom canvas-drawn interactive org-chart diagram (dendrogram renderer)
   Services/
+    ThemeService.cs               Theme manager, OS registry theme detection & settings persistence
+    DirectoryDiffService.cs       Recursive disk vs. blueprint comparison engine
     FileSystemService.cs          Bounded directory scanning, sanitization, disk creation & Recycle Bin operations
     IgnoreRuleService.cs          Smart ignore filter engine (.structureignore / .gitignore support)
     NaturalStringComparer.cs      Natural string comparer for numerical (1..10) and alphabetical (A-Z) sorting
     PinnedFoldersService.cs       Service to persist and manage pinned target locations
     ScriptGeneratorService.cs     Generates standalone PowerShell (.ps1), Batch (.bat), and Bash (.sh) creation scripts
   ViewModels/
-    MainViewModel.cs              Core MVVM ViewModel (commands, search, live sync, selection, navigation)
+    MainViewModel.cs              Core MVVM ViewModel (commands, themes, command palette, diff, search, live sync)
     RelayCommand.cs / ViewModelBase.cs  Base MVVM primitives
   Converters/                     XAML visibility, brush, layout direction, and grid length converters
 installer/
@@ -153,10 +184,12 @@ cd installer
 ```
 Output location: `installer/installer-output/FolderStructureCreatorSetup.exe`.
 
-### 🤖 Automated Releases via GitHub Actions
+---
+
+## 🤖 Automated Releases via GitHub Actions
 This project includes an automated GitHub Actions workflow ([.github/workflows/release.yml](file:///.github/workflows/release.yml)).
 
-#### ⚡ Release Options:
+### ⚡ Release Options:
 Whenever you want to trigger a new release, use any of these options:
 
 - **Option A (Double-Click Batch File):** Double-click [release.bat](file:///release.bat) in Windows Explorer and type the version (e.g. `5.0.2`).
@@ -166,7 +199,7 @@ Whenever you want to trigger a new release, use any of these options:
 
 All options will create and push the version tag to GitHub, triggering GitHub Actions to build and publish the release.
 
-#### Generated Release Assets:
+### Generated Release Assets:
 - **`FolderStructureCreator.exe` (~0.3 MB)** — Ultra-lightweight portable executable (Framework-Dependent).
 - **`FolderStructureCreator_Portable_Lightweight.zip` (~0.3 MB)** — Lightweight portable executable zipped.
 - **`FolderStructureCreator_Standalone.exe` (~68 MB)** — Self-contained compressed portable executable (no .NET required).
