@@ -253,15 +253,23 @@ public class MainViewModel : ViewModelBase
 
     private void RaiseStructureChanged()
     {
-        if (HasSearchQuery && !_isApplyingSearch)
-        {
-            ApplySearch();
-            return;
-        }
         StructureChanged?.Invoke();
     }
 
     public int TotalFolderCount => RootFolders.Sum(r => r.CountFoldersOnly());
+
+    public AppTheme SelectedTheme
+    {
+        get => ThemeService.CurrentTheme;
+        set
+        {
+            if (ThemeService.CurrentTheme != value)
+            {
+                ThemeService.ApplyTheme(value);
+                OnPropertyChanged(nameof(SelectedTheme));
+            }
+        }
+    }
 
     // ---- Commands ----
     public RelayCommand AddRootFolderCommand { get; }
@@ -292,6 +300,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
+    public RelayCommand SetThemeCommand { get; }
 
     public MainViewModel()
     {
@@ -346,6 +355,20 @@ public class MainViewModel : ViewModelBase
                 SelectPinnedFolder(new PinnedFolder(s));
         });
         ToggleSortOrderCommand = new RelayCommand(_ => IsSortAscending = !IsSortAscending);
+        SetThemeCommand = new RelayCommand(param =>
+        {
+            if (param is AppTheme t)
+                SelectedTheme = t;
+            else if (param is string s && Enum.TryParse<AppTheme>(s, out var parsedTheme))
+                SelectedTheme = parsedTheme;
+        });
+
+        ThemeService.ThemeChanged += _ =>
+        {
+            OnPropertyChanged(nameof(Drives));
+            OnPropertyChanged(nameof(PinnedFolders));
+            OnPropertyChanged(nameof(RootFolders));
+        };
 
         LoadDrives();
         LoadPinnedFolders();

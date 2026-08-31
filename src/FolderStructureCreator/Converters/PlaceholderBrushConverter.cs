@@ -1,17 +1,29 @@
+using System;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 
 namespace FolderStructureCreator.Converters;
 
-/// <summary>true (is a "Loading.../empty" placeholder) -> muted gray text; false -> normal text.</summary>
+/// <summary>true (is a "Loading.../empty" placeholder) -> secondary muted brush; false -> primary text brush.</summary>
 public class PlaceholderBrushConverter : IValueConverter
 {
-    private static readonly SolidColorBrush Muted = new(Color.FromRgb(0x94, 0xA3, 0xB8));
-    private static readonly SolidColorBrush Normal = new(Color.FromRgb(0xF1, 0xF5, 0xF9));
-
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => (value is bool b && b) ? Muted : Normal;
+    {
+        var app = Application.Current;
+        if (app == null)
+            return Brushes.Black;
+
+        if (value is bool isPlaceholder && isPlaceholder)
+        {
+            return app.TryFindResource("BrushTextSecondary") as Brush
+                ?? new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
+        }
+
+        return app.TryFindResource("BrushTextPrimary") as Brush
+            ?? new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A));
+    }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

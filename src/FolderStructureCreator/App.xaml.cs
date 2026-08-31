@@ -17,6 +17,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Initialize Theme System with saved or system theme
+        ThemeService.Initialize();
+
         // Global crash guard so the app never dies silently with a raw exception in GUI mode.
         DispatcherUnhandledException += (_, args) =>
         {

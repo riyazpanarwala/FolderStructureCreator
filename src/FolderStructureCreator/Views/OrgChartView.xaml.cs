@@ -129,6 +129,8 @@ public partial class OrgChartView : UserControl
         ChartScrollViewer.PreviewMouseDown += ChartScrollViewer_PreviewMouseDown;
         ChartScrollViewer.PreviewMouseMove += ChartScrollViewer_PreviewMouseMove;
         ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
+
+        FolderStructureCreator.Services.ThemeService.ThemeChanged += _ => RenderInternal();
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -908,7 +910,7 @@ public partial class OrgChartView : UserControl
             var drawingVisual = new DrawingVisual();
             using (DrawingContext dc = drawingVisual.RenderOpen())
             {
-                var bgBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A));
+                var bgBrush = (Application.Current.TryFindResource("BrushBg") as SolidColorBrush) ?? new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A));
                 dc.DrawRectangle(bgBrush, null, new Rect(0, 0, width, height));
 
                 var visualBrush = new VisualBrush(RootCanvas)

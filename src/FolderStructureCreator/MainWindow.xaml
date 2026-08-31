@@ -5,9 +5,10 @@
         xmlns:conv="clr-namespace:FolderStructureCreator.Converters"
         xmlns:views="clr-namespace:FolderStructureCreator.Views"
         xmlns:models="clr-namespace:FolderStructureCreator.Models"
+        xmlns:services="clr-namespace:FolderStructureCreator.Services"
         Title="Folder Structure Creator" Height="720" Width="1180" MinHeight="560" MinWidth="900"
         WindowStartupLocation="CenterScreen" Icon="AppIcon.ico"
-        Background="{StaticResource BrushBg}"
+        Background="{DynamicResource BrushBg}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
@@ -29,25 +30,33 @@
         <Grid Grid.Row="0" Margin="2,0,2,14">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="Folder Structure Creator" FontSize="20" FontWeight="Bold" Foreground="{StaticResource BrushTextPrimary}"/>
+                <TextBlock Text="Folder Structure Creator" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}"/>
                 <TextBlock Text="Design a reusable folder plan, then create it in a target destination." Style="{StaticResource SubText}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Theme Selector Dropdown -->
+                <ComboBox SelectedValue="{Binding SelectedTheme}" SelectedValuePath="Tag" Width="140" Margin="0,0,14,0" VerticalAlignment="Center" ToolTip="Select Application Theme">
+                    <ComboBoxItem Content="🌙 Dark" Tag="{x:Static services:AppTheme.Dark}"/>
+                    <ComboBoxItem Content="☀️ Light" Tag="{x:Static services:AppTheme.Light}"/>
+                    <ComboBoxItem Content="🔲 High Contrast" Tag="{x:Static services:AppTheme.HighContrast}"/>
+                    <ComboBoxItem Content="💻 System" Tag="{x:Static services:AppTheme.System}"/>
+                </ComboBox>
+
                 <Border Style="{StaticResource StepBadgeActive}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="1. Build Blueprint" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}"/>
+                        <TextBlock Text="1. Build Blueprint" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushAccent}"/>
                     </StackPanel>
                 </Border>
-                <TextBlock Text="➔" Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
+                <TextBlock Text="➔" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
                 <Border Style="{StaticResource StepBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="2. Select Destination" FontSize="11.5" FontWeight="Medium" Foreground="{StaticResource BrushTextPrimary}"/>
+                        <TextBlock Text="2. Select Destination" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource BrushTextPrimary}"/>
                     </StackPanel>
                 </Border>
-                <TextBlock Text="➔" Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
+                <TextBlock Text="➔" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" Margin="2,0,8,0" FontSize="12"/>
                 <Border Style="{StaticResource StepBadge}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="3. Create Folders" FontSize="11.5" FontWeight="Medium" Foreground="{StaticResource BrushTextPrimary}"/>
+                        <TextBlock Text="3. Create Folders" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource BrushTextPrimary}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -56,7 +65,7 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=430}" MinWidth="0"/><ColumnDefinition Width="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource BoolToGridLength}, ConverterParameter=Auto}"/><ColumnDefinition Width="*" MinWidth="390"/></Grid.ColumnDefinitions>
             <!-- The destination browser stays visible in both plan views. -->
-            <Border Grid.Column="0" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Visibility="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource InverseBoolToVis}}">
+            <Border Grid.Column="0" Background="{DynamicResource BrushPanel}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Visibility="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource InverseBoolToVis}}">
                 <DockPanel Margin="12">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <DockPanel LastChildFill="False" Margin="0,0,0,4">
@@ -70,11 +79,11 @@
                     </StackPanel>
 
                     <!-- Pinned Folders Section -->
-                    <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}">
+                    <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{DynamicResource BrushAccentSoft}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="📌 Pinned Folders" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource BrushTextPrimary}"/>
+                                <TextBlock Text="📌 Pinned Folders" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource BrushTextPrimary}"/>
                                 <TextBlock Grid.Column="1" Text="Expand &amp; Quick Access" Style="{StaticResource SubText}" FontSize="10"/>
                             </Grid>
                             <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
@@ -106,7 +115,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                     <TextBlock Text="📂 " FontSize="11.5" Foreground="#F59E0B"/>
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5" Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center" ToolTip="{Binding Path}"/>
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource BrushTextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="110" VerticalAlignment="Center" ToolTip="{Binding Path}"/>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0,0,0">
                                                     <Button Content="📊 Chart" Style="{StaticResource ToolButton}" Padding="4,1" FontSize="10" Command="{Binding DataContext.ShowPinnedFolderChartCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="{Binding}" ToolTip="Open chart view for this pinned folder"/>
@@ -118,7 +127,18 @@
                                         <HierarchicalDataTemplate DataType="{x:Type models:FileSystemNode}" ItemsSource="{Binding Children}">
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
-                                                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsPlaceholder}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+                                                                    <Setter Property="FontStyle" Value="Italic"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                             </StackPanel>
                                         </HierarchicalDataTemplate>
                                     </TreeView.Resources>
@@ -148,7 +168,18 @@
                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
-                                    <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{Binding IsPlaceholder, Converter={StaticResource PlaceholderBrush}}"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsPlaceholder}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+                                                        <Setter Property="FontStyle" Value="Italic"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </HierarchicalDataTemplate>
                         </TreeView.ItemTemplate>
@@ -157,7 +188,7 @@
             </Border>
             <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" Visibility="{Binding IsDestinationSidebarCollapsed, Converter={StaticResource InverseBoolToVis}}"/>
 
-            <Border Grid.Column="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8">
+            <Border Grid.Column="2" Background="{DynamicResource BrushPanel}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8">
                 <DockPanel Margin="12">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -168,12 +199,12 @@
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <CheckBox Content="Ignore rules (.structureignore)" IsChecked="{Binding EnableIgnoreRules}" ToolTip="When checked, folder imports automatically ignore system/build folders (node_modules, bin, obj, .git, etc.) and .structureignore / .gitignore rules." VerticalAlignment="Center" Margin="0,0,12,0"/>
                                 <CheckBox Content="Live computer sync" IsChecked="{Binding IsLiveSyncMode}" ToolTip="When checked, adding, renaming, deleting (Recycle Bin), and drag &amp; drop moving directly updates physical folders on disk." VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <Button Content="Tree" Command="{Binding ShowTreeViewCommand}" ToolTip="Editable indented list view"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="False"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="#0F172A"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-                                <Button Content="Chart" Command="{Binding ShowOrgChartViewCommand}" ToolTip="Visual folder diagram"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="True"><Setter Property="Background" Value="{StaticResource BrushAccent}"/><Setter Property="Foreground" Value="#0F172A"/><Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                                <Button Content="Tree" Command="{Binding ShowTreeViewCommand}" ToolTip="Editable indented list view"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="False"><Setter Property="Background" Value="{DynamicResource BrushAccent}"/><Setter Property="Foreground" Value="{DynamicResource BrushPrimaryBtnFg}"/><Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                                <Button Content="Chart" Command="{Binding ShowOrgChartViewCommand}" ToolTip="Visual folder diagram"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource ToolButton}"><Style.Triggers><DataTrigger Binding="{Binding IsOrgChartView}" Value="True"><Setter Property="Background" Value="{DynamicResource BrushAccent}"/><Setter Property="Foreground" Value="{DynamicResource BrushPrimaryBtnFg}"/><Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
                             </StackPanel>
                         </Grid>
                         <WrapPanel Margin="0,10,0,0">
-                            <Button Content="+ Add root" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}" Background="{StaticResource BrushAccentSoft}" BorderBrush="{StaticResource BrushAccent}" Foreground="{StaticResource BrushAccent}" FontWeight="SemiBold"/>
+                            <Button Content="+ Add root" Style="{StaticResource ToolButton}" Command="{Binding AddRootFolderCommand}" Background="{DynamicResource BrushAccentSoft}" BorderBrush="{DynamicResource BrushAccent}" Foreground="{DynamicResource BrushAccent}" FontWeight="SemiBold"/>
                             <Button Content="📥 Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/>
                             <Button Content="📜 Export script" Style="{StaticResource ToolButton}" Click="ExportScript_Click" ToolTip="Export blueprint as a standalone executable script (.ps1, .bat, or .sh)"/>
                             <Button Content="Clear" Style="{StaticResource ToolButton}" Command="{Binding ClearPlanCommand}"/>
@@ -191,7 +222,7 @@
                         </Grid>
 
                         <Popup x:Name="SearchResultsPopup" PlacementTarget="{Binding ElementName=SearchTextBox}" Placement="Bottom" IsOpen="{Binding IsSearchDropdownOpen, Mode=TwoWay}" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Slide" VerticalOffset="4">
-                            <Border Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushAccent}" BorderThickness="1.5" CornerRadius="6" Width="{Binding ActualWidth, ElementName=SearchTextBox}" MaxHeight="260" Padding="4">
+                            <Border Background="{DynamicResource BrushPanel}" BorderBrush="{DynamicResource BrushAccent}" BorderThickness="1.5" CornerRadius="6" Width="{Binding ActualWidth, ElementName=SearchTextBox}" MaxHeight="260" Padding="4">
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.3" Color="#000000"/>
                                 </Border.Effect>
@@ -201,8 +232,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Matching Folders" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrushTextSecondary}"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding SearchMatchStatusText}" FontSize="10.5" Foreground="{StaticResource BrushAccent}"/>
+                                        <TextBlock Text="Matching Folders" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding SearchMatchStatusText}" FontSize="10.5" Foreground="{DynamicResource BrushAccent}"/>
                                     </Grid>
                                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                                         <ItemsControl ItemsSource="{Binding MatchingSearchResults}">
@@ -220,7 +251,7 @@
                                                             <StackPanel VerticalAlignment="Center">
                                                                 <StackPanel Orientation="Horizontal">
                                                                     <TextBlock Text="📂 " FontSize="12" Foreground="#F59E0B"/>
-                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource BrushTextPrimary}"/>
+                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource BrushTextPrimary}"/>
                                                                 </StackPanel>
                                                                 <TextBlock Text="{Binding FullPathDisplay}" Style="{StaticResource SubText}" FontSize="10.5" Margin="16,2,0,0" TextTrimming="CharacterEllipsis"/>
                                                             </StackPanel>
@@ -229,7 +260,7 @@
                                                     </Border>
                                                     <DataTemplate.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource BrushAccentSoft}"/>
+                                                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
                                                         </Trigger>
                                                     </DataTemplate.Triggers>
                                                 </DataTemplate>
@@ -239,7 +270,7 @@
                                 </DockPanel>
                             </Border>
                         </Popup>
-                        <Border Background="{StaticResource BrushAccentSoft}" CornerRadius="5" Padding="8,5" Margin="0,8,0,0" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}">
+                        <Border Background="{DynamicResource BrushAccentSoft}" CornerRadius="5" Padding="8,5" Margin="0,8,0,0" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -278,7 +309,7 @@
                                                 <MenuItem Header="Move to Root" Command="{Binding MoveToRootCommand}"/>
                                                 <Separator/>
                                                 <MenuItem Header="Rename" Command="{Binding StartRenameCommand}"/>
-                                                <MenuItem Header="Delete" Command="{Binding DeleteNodeCommand}" Foreground="{StaticResource BrushDanger}"/>
+                                                <MenuItem Header="Delete" Command="{Binding DeleteNodeCommand}" Foreground="{DynamicResource BrushDanger}"/>
                                             </ContextMenu>
                                         </Setter.Value>
                                     </Setter>
@@ -300,7 +331,7 @@
                                             </Border.Style>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="📂 " FontSize="11" Foreground="#F59E0B"/>
-                                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource BrushTextPrimary}" MouseDown="StructureNodeText_MouseDown">
+                                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource BrushTextPrimary}" MouseDown="StructureNodeText_MouseDown">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Style.Triggers>
@@ -320,14 +351,14 @@
                             </TreeView.ItemTemplate>
                         </TreeView>
                         <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
-                        <Border Background="{StaticResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320"><TextBlock Text="Start a folder plan" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource BrushTextPrimary}" HorizontalAlignment="Center"/><TextBlock Text="Add a root folder to build it by hand, or import an existing folder as a starting point." Style="{StaticResource SubText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="Add root" Style="{StaticResource PrimaryButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/></StackPanel></StackPanel></Border>
+                        <Border Background="{DynamicResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}"><StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320"><TextBlock Text="Start a folder plan" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" HorizontalAlignment="Center"/><TextBlock Text="Add a root folder to build it by hand, or import an existing folder as a starting point." Style="{StaticResource SubText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="Add root" Style="{StaticResource PrimaryButton}" Command="{Binding AddRootFolderCommand}"/><Button Content="Import folder" Style="{StaticResource ToolButton}" Command="{Binding ImportFromReferenceCommand}"/></StackPanel></StackPanel></Border>
                     </Grid>
                 </DockPanel>
             </Border>
         </Grid>
 
         <!-- Destination, status, and final action remain together throughout the workflow. -->
-        <Border Grid.Row="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,12,0,0">
+        <Border Grid.Row="2" Background="{DynamicResource BrushPanel}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,12,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

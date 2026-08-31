@@ -1,0 +1,23 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Light Theme Palette -->
+    <SolidColorBrush x:Key="BrushBg" Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="BrushPanel" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushBorder" Color="#CBD5E1"/>
+    <SolidColorBrush x:Key="BrushTextPrimary" Color="#0F172A"/>
+    <SolidColorBrush x:Key="BrushTextSecondary" Color="#64748B"/>
+    <SolidColorBrush x:Key="BrushAccent" Color="#0D9488"/>
+    <SolidColorBrush x:Key="BrushAccentHover" Color="#0F766E"/>
+    <SolidColorBrush x:Key="BrushAccentSoft" Color="#E6FFFA"/>
+    <SolidColorBrush x:Key="BrushDanger" Color="#DC2626"/>
+    <SolidColorBrush x:Key="BrushDangerSoft" Color="#FEE2E2"/>
+    <SolidColorBrush x:Key="BrushSelected" Color="#BAE6FD"/>
+    <SolidColorBrush x:Key="BrushHover" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="BrushInputBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushOrgConnector" Color="#64748B"/>
+    <SolidColorBrush x:Key="BrushCardBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushDropdownBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushPrimaryBtnFg" Color="#FFFFFF"/>
+
+</ResourceDictionary>
