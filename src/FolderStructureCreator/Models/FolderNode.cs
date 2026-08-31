@@ -16,6 +16,37 @@ public class FolderNode : INotifyPropertyChanged
     private bool _isSelected;
     private bool _isEditing;
     private bool _isMatchingSearch;
+    private NodeDiffStatus _diffStatus = NodeDiffStatus.None;
+
+    public NodeDiffStatus DiffStatus
+    {
+        get => _diffStatus;
+        set
+        {
+            if (SetField(ref _diffStatus, value))
+            {
+                OnPropertyChanged(nameof(DiffBadgeText));
+                OnPropertyChanged(nameof(HasDiffBadge));
+            }
+        }
+    }
+
+    public bool HasDiffBadge => DiffStatus != NodeDiffStatus.None;
+
+    public string DiffBadgeText => DiffStatus switch
+    {
+        NodeDiffStatus.MissingOnDisk => "[+ MISSING]",
+        NodeDiffStatus.MatchesDisk => "[✓ MATCH]",
+        NodeDiffStatus.ExtraOnDisk => "[⚡ EXTRA]",
+        _ => string.Empty
+    };
+
+    public void ResetDiffStatusRecursive()
+    {
+        DiffStatus = NodeDiffStatus.None;
+        foreach (var child in Children)
+            child.ResetDiffStatusRecursive();
+    }
 
     private string? _realPath;
 
@@ -128,10 +159,16 @@ public class FolderNode : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        if (Equals(field, value)) return;
-        field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
     }
 }

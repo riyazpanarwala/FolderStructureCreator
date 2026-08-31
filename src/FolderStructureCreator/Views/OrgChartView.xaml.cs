@@ -490,28 +490,65 @@ public partial class OrgChartView : UserControl
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
-            var box = new Border
+            Brush boxBackground = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
+            Brush boxBorderBrush = isSelected ? SelectedBrush : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
+
+            if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
             {
-                Width = BoxWidth,
-                Height = BoxHeight,
-                Background = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill),
-                BorderBrush = isSelected ? SelectedBrush : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border)),
-                BorderThickness = new Thickness((isSelected || isMatch) ? 2.5 : 1),
-                CornerRadius = new CornerRadius(6),
-                Cursor = Cursors.Hand,
-                ToolTip = node.Name
+                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
+                boxBackground = new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B)); // Dark Emerald
+            }
+            else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
+            {
+                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)); // Slate Neutral
+            }
+            else if (node.DiffStatus == NodeDiffStatus.ExtraOnDisk)
+            {
+                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
+                boxBackground = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F)); // Dark Amber
+            }
+
+            var boxStack = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            box.Child = new TextBlock
+            boxStack.Children.Add(new TextBlock
             {
                 Text = node.Name,
                 FontSize = 11.5,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.Black,
+                Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(6, 0, 6, 0)
+                Margin = new Thickness(4, 0, 4, 0)
+            });
+
+            if (node.HasDiffBadge)
+            {
+                boxStack.Children.Add(new TextBlock
+                {
+                    Text = node.DiffBadgeText,
+                    FontSize = 9.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = node.DiffStatus == NodeDiffStatus.MissingOnDisk ? new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)) : new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)),
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
+            var box = new Border
+            {
+                Width = BoxWidth,
+                Height = BoxHeight,
+                Background = boxBackground,
+                BorderBrush = boxBorderBrush,
+                BorderThickness = new Thickness((isSelected || isMatch || node.HasDiffBadge) ? 2.5 : 1),
+                CornerRadius = new CornerRadius(6),
+                Cursor = Cursors.Hand,
+                ToolTip = node.Name,
+                Child = boxStack
             };
 
             double boxX, boxY;

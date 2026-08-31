@@ -273,6 +273,61 @@ public class MainViewModel : ViewModelBase
 
     public event Action? RequestExportScript;
 
+    // ---- Blueprint vs. Disk Diff ----
+    private bool _isDiffActive;
+    public bool IsDiffActive
+    {
+        get => _isDiffActive;
+        set => SetField(ref _isDiffActive, value);
+    }
+
+    private string _diffSummaryText = string.Empty;
+    public string DiffSummaryText
+    {
+        get => _diffSummaryText;
+        set => SetField(ref _diffSummaryText, value);
+    }
+
+    private bool _hasMissingFolders;
+    public bool HasMissingFolders
+    {
+        get => _hasMissingFolders;
+        set => SetField(ref _hasMissingFolders, value);
+    }
+
+    public void CompareBlueprintWithDisk()
+    {
+        if (string.IsNullOrWhiteSpace(TargetPath) || !Directory.Exists(TargetPath))
+        {
+            StatusMessage = "Please select or enter a valid destination folder on disk first.";
+            return;
+        }
+
+        var result = DirectoryDiffService.EvaluateDiff(RootFolders, TargetPath);
+        IsDiffActive = true;
+        DiffSummaryText = result.SummaryText;
+        HasMissingFolders = result.HasMissing;
+        StatusMessage = $"Diff complete: {result.MissingCount} missing, {result.MatchedCount} matched.";
+        RaiseStructureChanged();
+    }
+
+    public void ClearDiff()
+    {
+        IsDiffActive = false;
+        DiffSummaryText = string.Empty;
+        HasMissingFolders = false;
+        foreach (var root in RootFolders)
+            root.ResetDiffStatusRecursive();
+        RaiseStructureChanged();
+    }
+
+    public void CreateMissingFoldersOnly()
+    {
+        if (!IsDiffActive || !HasMissingFolders) return;
+        CreateStructure();
+        CompareBlueprintWithDisk();
+    }
+
     // ---- Point 8: Command Palette (Ctrl + K) ----
     private bool _isCommandPaletteOpen;
     public bool IsCommandPaletteOpen
@@ -368,6 +423,9 @@ public class MainViewModel : ViewModelBase
     public RelayCommand OpenCommandPaletteCommand { get; }
     public RelayCommand CloseCommandPaletteCommand { get; }
     public RelayCommand ExecuteCommandPaletteItemCommand { get; }
+    public RelayCommand CompareBlueprintWithDiskCommand { get; }
+    public RelayCommand CreateMissingFoldersOnlyCommand { get; }
+    public RelayCommand ClearDiffCommand { get; }
 
     public MainViewModel()
     {
@@ -434,6 +492,9 @@ public class MainViewModel : ViewModelBase
         OpenCommandPaletteCommand = new RelayCommand(_ => OpenCommandPalette());
         CloseCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = false);
         ExecuteCommandPaletteItemCommand = new RelayCommand(param => ExecuteCommandPaletteItem(param as CommandItem ?? SelectedCommandPaletteItem));
+        CompareBlueprintWithDiskCommand = new RelayCommand(_ => CompareBlueprintWithDisk(), _ => RootFolders.Count > 0 && !string.IsNullOrWhiteSpace(TargetPath));
+        CreateMissingFoldersOnlyCommand = new RelayCommand(_ => CreateMissingFoldersOnly(), _ => IsDiffActive && HasMissingFolders);
+        ClearDiffCommand = new RelayCommand(_ => ClearDiff(), _ => IsDiffActive);
 
         InitializeCommandPaletteRegistry();
 
@@ -1298,7 +1359,9 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Switch Theme: High Contrast Mode", "Appearance", "🔲", SetThemeCommand, commandParameter: AppTheme.HighContrast));
         AllCommands.Add(new CommandItem("Switch Theme: Windows System Match", "Appearance", "💻", SetThemeCommand, commandParameter: AppTheme.System));
 
-        // Options
+        // Options & Diff
+        AllCommands.Add(new CommandItem("Compare Blueprint with Physical Disk (Diff)", "Analytics", "🔍", CompareBlueprintWithDiskCommand));
+        AllCommands.Add(new CommandItem("Create Missing Blueprint Folders Only", "Blueprint", "🚀", CreateMissingFoldersOnlyCommand));
         AllCommands.Add(new CommandItem("Toggle Live Computer Sync Mode", "Options", "🔄", new RelayCommand(_ => IsLiveSyncMode = !IsLiveSyncMode)));
         AllCommands.Add(new CommandItem("Toggle Smart Ignore Rules (.structureignore)", "Options", "🚫", new RelayCommand(_ => EnableIgnoreRules = !EnableIgnoreRules)));
         AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Browser", "🔀", ToggleSortOrderCommand));
