@@ -107,6 +107,7 @@
                                         <Setter Property="ContextMenu">
                                             <Setter.Value>
                                                 <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="📂 Open in Explorer" Command="{Binding OpenSelectedFolderInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                     <MenuItem Header="📊 View Chart" Command="{Binding ShowPinnedFolderChartCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                     <MenuItem Header="🎯 Select Destination" Command="{Binding SelectPinnedFolderCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                     <MenuItem Header="📌 Pin Subfolder" Command="{Binding PinFolderCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
@@ -166,6 +167,7 @@
                                 <Setter Property="ContextMenu">
                                     <Setter.Value>
                                         <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                            <MenuItem Header="📂 Open in Explorer" Command="{Binding OpenSelectedFolderInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             <MenuItem Header="📊 View Chart" Command="{Binding ShowSelectedFolderOrgChartCommand}"/>
                                             <MenuItem Header="📌 Pin folder" Command="{Binding PinSelectedFolderCommand}"/>
                                         </ContextMenu>

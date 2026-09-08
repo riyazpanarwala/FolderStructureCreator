@@ -36,6 +36,7 @@ public class MainViewModel : ViewModelBase
 
             ShowSelectedFolderOrgChartCommand?.RaiseCanExecuteChanged();
             PinSelectedFolderCommand?.RaiseCanExecuteChanged();
+            OpenSelectedFolderInExplorerCommand?.RaiseCanExecuteChanged();
         }
     }
 
@@ -398,6 +399,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand MoveToRootCommand { get; }
     public RelayCommand RefreshDrivesCommand { get; }
     public RelayCommand ShowSelectedFolderOrgChartCommand { get; }
+    public RelayCommand OpenSelectedFolderInExplorerCommand { get; }
     public RelayCommand CreateStructureCommand { get; }
     public RelayCommand OpenInExplorerCommand { get; }
     public RelayCommand StartRenameCommand { get; }
@@ -437,6 +439,23 @@ public class MainViewModel : ViewModelBase
         MoveToRootCommand = new RelayCommand(_ => MoveNodeToRoot(SelectedStructureNode!), _ => SelectedStructureNode?.Parent != null);
         RefreshDrivesCommand = new RelayCommand(_ => LoadDrives());
         ShowSelectedFolderOrgChartCommand = new RelayCommand(_ => ShowSelectedFolderOrgChart(), _ => SelectedTargetNode is { IsPlaceholder: false });
+        OpenSelectedFolderInExplorerCommand = new RelayCommand(
+            param =>
+            {
+                var path = param as string
+                           ?? (param as FileSystemNode)?.FullPath
+                           ?? (param as PinnedFolder)?.Path
+                           ?? SelectedTargetNode?.FullPath;
+                OpenFolderPathInExplorer(path);
+            },
+            param =>
+            {
+                var path = param as string
+                           ?? (param as FileSystemNode)?.FullPath
+                           ?? (param as PinnedFolder)?.Path
+                           ?? SelectedTargetNode?.FullPath;
+                return !string.IsNullOrWhiteSpace(path);
+            });
         CreateStructureCommand = new RelayCommand(_ => CreateStructure(), _ => CanCreateStructure());
         OpenInExplorerCommand = new RelayCommand(param => OpenInExplorer(param as FolderNode), _ => SelectedStructureNode != null || RootFolders.Count > 0);
         StartRenameCommand = new RelayCommand(param => StartRename(param as FolderNode));
@@ -1088,6 +1107,31 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    public void OpenFolderPathInExplorer(string? path)
+    {
+        path ??= SelectedTargetNode?.FullPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            StatusMessage = "Cannot open in Explorer: No valid folder path selected.";
+            return;
+        }
+
+        var result = FileSystemService.OpenInExplorer(path);
+        if (result.Success)
+        {
+            StatusMessage = $"Opened in Explorer: \"{result.OpenedPath}\"";
+        }
+        else
+        {
+            StatusMessage = $"Could not open in Explorer: \"{path}\".";
+            MessageBox.Show(
+                $"Could not open folder in Explorer:\n\nPath: {path}\n\nError: {result.Error}",
+                "Explorer Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
     private void ApplySearch()
     {
         if (_isApplyingSearch) return;
@@ -1366,6 +1410,7 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Toggle Smart Ignore Rules (.structureignore)", "Options", "🚫", new RelayCommand(_ => EnableIgnoreRules = !EnableIgnoreRules)));
         AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Browser", "🔀", ToggleSortOrderCommand));
         AllCommands.Add(new CommandItem("Refresh Real Computer Drives", "Browser", "🔄", RefreshDrivesCommand));
+        AllCommands.Add(new CommandItem("Open Selected Drive Folder in Explorer", "Browser", "📂", OpenSelectedFolderInExplorerCommand));
 
         ApplyCommandPaletteFilter();
     }
