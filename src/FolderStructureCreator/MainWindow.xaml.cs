@@ -102,6 +102,16 @@ public partial class MainWindow : Window
         }
     }
 
+    private void PinnedFolders_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        var scrollViewer = FindVisualChild<ScrollViewer>(PinnedFoldersTreeView);
+        if (scrollViewer != null && scrollViewer.ScrollableHeight > 0)
+        {
+            scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - (e.Delta / 2.5));
+            e.Handled = true;
+        }
+    }
+
     // TreeView.SelectedItem is read-only, so we bridge it into the view model here.
     private void DirectoryTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
@@ -420,6 +430,20 @@ public partial class MainWindow : Window
         {
             if (current is T ancestor) return ancestor;
             current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T found) return found;
+            var nested = FindVisualChild<T>(child);
+            if (nested != null) return nested;
         }
         return null;
     }
