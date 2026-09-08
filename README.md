@@ -187,17 +187,40 @@ Output location: `installer/installer-output/FolderStructureCreatorSetup.exe`.
 ---
 
 ## 🤖 Automated Releases via GitHub Actions
-This project includes an automated GitHub Actions workflow ([.github/workflows/release.yml](file:///.github/workflows/release.yml)).
+This project includes an automated GitHub Actions workflow ([.github/workflows/release.yml](file:///.github/workflows/release.yml)) combined with an intelligent, one-click release script.
 
-### ⚡ Release Options:
-Whenever you want to trigger a new release, use any of these options:
+### ⚡ Interactive One-Click Release:
+Whenever you want to publish a new release, simply:
+- **Double-click** [release.bat](file:///release.bat) in Windows Explorer, OR
+- **Run** `.\release.ps1` in PowerShell.
 
-- **Option A (Double-Click Batch File):** Double-click [release.bat](file:///release.bat) in Windows Explorer and type the version (e.g. `5.0.2`).
-- **Option B (Git Terminal Alias):** Run `git tag-push v5.0.2` in your terminal.
-- **Option C (PowerShell Script):** Run `.\release.ps1 v5.0.2` in PowerShell.
-- **Option D (Manual Git Commands):** Run `git tag v5.0.2` followed by `git push origin v5.0.2`.
+#### How It Works:
+1. **Fetches from GitHub:** Automatically runs `git fetch --tags origin` to ensure it has all existing release tags.
+2. **Detects Current Version:** Finds the highest existing version tag (e.g., `v5.0.4`).
+3. **Presents an Interactive Bump Menu:**
+   ```text
+   ==================================================
+    Latest release version detected: v5.0.4
+   ==================================================
 
-All options will create and push the version tag to GitHub, triggering GitHub Actions to build and publish the release.
+   Select the release bump type:
+     [1] Patch : v5.0.5 (Bug fixes, minor tweaks) [Default]
+     [2] Minor : v5.1.0 (New features, enhancements)
+     [3] Major : v6.0.0 (Major overhaul or breaking change)
+     [4] Custom: Enter a specific version manually
+     [5] Cancel
+
+   Choose an option [1-5] (Default is 1):
+   ```
+4. **One-Key Selection:**
+   - Press **Enter** (or `1`) to immediately select the next **Patch** (`v5.0.5`).
+   - Press `2` to select the next **Minor** (`v5.1.0`).
+   - Press `3` to select the next **Major** (`v6.0.0`).
+   - Press `4` to enter a custom version tag.
+   - Press `5` or `q` to safely cancel.
+5. **Auto Tag & Push:** Automatically creates the git tag and pushes it to GitHub, immediately triggering the GitHub Actions build & publish workflow!
+
+*(Optional CLI Usage: You can also pass versions directly: `.\release.ps1 v5.0.5` or test with `.\release.ps1 -DryRun`.)*
 
 ### Generated Release Assets:
 - **`FolderStructureCreator.exe` (~0.3 MB)** — Ultra-lightweight portable executable (Framework-Dependent).
