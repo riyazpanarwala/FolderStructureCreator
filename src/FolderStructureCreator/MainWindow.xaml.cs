@@ -66,6 +66,12 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (e.Key == Key.W && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                OrgChartHost.FitToWidth();
+                e.Handled = true;
+                return;
+            }
         }
 
         if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -234,6 +240,7 @@ public partial class MainWindow : Window
     private void ZoomOutOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomOut();
     private void ResetZoomOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ResetZoom();
     private void FitOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToView();
+    private void FitWidthOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.FitToWidth();
 
     private void ExportOrgChart_Click(object sender, RoutedEventArgs e)
     {

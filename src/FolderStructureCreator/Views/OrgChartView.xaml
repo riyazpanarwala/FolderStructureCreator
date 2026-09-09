@@ -3,11 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid x:Name="MainGrid">
         <ScrollViewer x:Name="ChartScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="Transparent">
-            <Canvas x:Name="RootCanvas" Background="Transparent" Margin="4" RenderTransformOrigin="0,0">
-                <Canvas.LayoutTransform>
-                    <ScaleTransform x:Name="ChartScale" ScaleX="1" ScaleY="1"/>
-                </Canvas.LayoutTransform>
-            </Canvas>
+            <Grid x:Name="CanvasContainer" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Canvas x:Name="RootCanvas" Background="Transparent" Margin="4" RenderTransformOrigin="0,0">
+                    <Canvas.LayoutTransform>
+                        <ScaleTransform x:Name="ChartScale" ScaleX="1" ScaleY="1"/>
+                    </Canvas.LayoutTransform>
+                </Canvas>
+            </Grid>
         </ScrollViewer>
 
         <!-- Root Drop Target Overlay Banner (Shown only during Drag) -->

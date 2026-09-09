@@ -129,6 +129,7 @@ public partial class OrgChartView : UserControl
         ChartScrollViewer.PreviewMouseDown += ChartScrollViewer_PreviewMouseDown;
         ChartScrollViewer.PreviewMouseMove += ChartScrollViewer_PreviewMouseMove;
         ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
+        ChartScrollViewer.SizeChanged += (_, _) => UpdateContainerAlignment();
 
         FolderStructureCreator.Services.ThemeService.ThemeChanged += _ => RenderInternal();
     }
@@ -298,6 +299,7 @@ public partial class OrgChartView : UserControl
 
             ChartScrollViewer.ScrollToHorizontalOffset(targetX);
             ChartScrollViewer.ScrollToVerticalOffset(targetY);
+            UpdateContainerAlignment();
         }
 
         if (ChartScrollViewer.ViewportWidth > 0 && ChartScrollViewer.ViewportHeight > 0)
@@ -307,6 +309,38 @@ public partial class OrgChartView : UserControl
         else
         {
             Dispatcher.BeginInvoke(PerformFit, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
+    /// <summary>Scales chart to comfortably fit the horizontal viewport width, eliminating right-side empty space.</summary>
+    public void FitToWidth()
+    {
+        void PerformFitWidth()
+        {
+            if (RootCanvas.Width <= 0 || ChartScrollViewer.ViewportWidth <= 0)
+                return;
+
+            double padding = 32;
+            var widthScale = (ChartScrollViewer.ViewportWidth - padding) / RootCanvas.Width;
+            double fitZoom = Math.Clamp(widthScale, MinZoom, MaxZoom);
+
+            SetZoom(fitZoom);
+
+            double scaledWidth = RootCanvas.Width * ChartScale.ScaleX;
+            double targetX = Math.Max(0, (scaledWidth - ChartScrollViewer.ViewportWidth) / 2.0);
+
+            ChartScrollViewer.ScrollToHorizontalOffset(targetX);
+            ChartScrollViewer.ScrollToVerticalOffset(0);
+            UpdateContainerAlignment();
+        }
+
+        if (ChartScrollViewer.ViewportWidth > 0)
+        {
+            PerformFitWidth();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(PerformFitWidth, System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
 
@@ -332,6 +366,20 @@ public partial class OrgChartView : UserControl
         ChartScale.ScaleX = clamped;
         ChartScale.ScaleY = clamped;
         ZoomLevelChanged?.Invoke(clamped);
+        UpdateContainerAlignment();
+    }
+
+    private void UpdateContainerAlignment()
+    {
+        if (CanvasContainer == null) return;
+        double scaledW = RootCanvas.Width * ChartScale.ScaleX;
+        double scaledH = RootCanvas.Height * ChartScale.ScaleY;
+        CanvasContainer.HorizontalAlignment = (ChartScrollViewer.ViewportWidth > 0 && scaledW < ChartScrollViewer.ViewportWidth)
+            ? HorizontalAlignment.Center
+            : HorizontalAlignment.Left;
+        CanvasContainer.VerticalAlignment = (ChartScrollViewer.ViewportHeight > 0 && scaledH < ChartScrollViewer.ViewportHeight)
+            ? VerticalAlignment.Center
+            : VerticalAlignment.Top;
     }
 
     private void RenderInternal()
@@ -353,7 +401,7 @@ public partial class OrgChartView : UserControl
 
         double LayoutNode(FolderNode node, int depth)
         {
-            if (node.Children.Count == 0)
+            if (node.Children.Count == 0 || !node.IsExpanded)
             {
                 double row = nextRow;
                 nextRow += 1;
@@ -440,7 +488,7 @@ public partial class OrgChartView : UserControl
         // ---- Connectors first, so node boxes visually sit on top of the lines. ----
         void DrawConnectors(FolderNode node)
         {
-            if (!positions.TryGetValue(node, out var parentPos)) return;
+            if (!node.IsExpanded || !positions.TryGetValue(node, out var parentPos)) return;
 
             foreach (var child in node.Children)
             {
@@ -535,7 +583,7 @@ public partial class OrgChartView : UserControl
                 Foreground = textForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(4, 0, 4, 0)
+                Margin = new Thickness(6, 0, (node.Children.Count > 0 && !isVertical ? 15 : 6), (node.Children.Count > 0 && isVertical ? 6 : 0))
             });
 
             if (node.HasDiffBadge)
@@ -735,15 +783,100 @@ public partial class OrgChartView : UserControl
             menu.Items.Add(renameItem);
             menu.Items.Add(deleteItem);
 
+            if (node.Children.Count > 0)
+            {
+                var toggleExpandItem = new MenuItem
+                {
+                    Header = node.IsExpanded ? "⊟ Collapse subfolders" : $"⊞ Expand ({node.Children.Count} subfolders)"
+                };
+                toggleExpandItem.Click += (_, _) =>
+                {
+                    NodeClicked?.Invoke(node);
+                    node.IsExpanded = !node.IsExpanded;
+                    RenderInternal();
+                    StructureEdited?.Invoke();
+                };
+                menu.Items.Add(new Separator());
+                menu.Items.Add(toggleExpandItem);
+            }
+
             box.ContextMenu = menu;
 
             RootCanvas.Children.Add(box);
+
+            if (node.Children.Count > 0)
+            {
+                bool expanded = node.IsExpanded;
+                double badgeHeight = 18;
+                double badgeWidth = expanded ? 18 : Math.Max(26, 14 + node.Children.Count.ToString().Length * 7);
+
+                var badgeText = new TextBlock
+                {
+                    Text = expanded ? "−" : $"+{node.Children.Count}",
+                    FontSize = expanded ? 11.5 : 9.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = expanded ? new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)) : Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, expanded ? -1.5 : 0, 0, 0)
+                };
+
+                var badge = new Border
+                {
+                    Width = badgeWidth,
+                    Height = badgeHeight,
+                    CornerRadius = new CornerRadius(badgeHeight / 2.0),
+                    Background = expanded
+                        ? new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF6))
+                        : new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E)),
+                    BorderBrush = expanded
+                        ? new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B))
+                        : new SolidColorBrush(Color.FromRgb(0x14, 0xB8, 0xA6)),
+                    BorderThickness = new Thickness(1.2),
+                    Cursor = Cursors.Hand,
+                    ToolTip = expanded
+                        ? $"Click to collapse ({node.Children.Count} subfolders)"
+                        : $"Click to expand ({node.Children.Count} subfolders)",
+                    Child = badgeText
+                };
+
+                badge.MouseEnter += (_, _) => badge.Opacity = 0.82;
+                badge.MouseLeave += (_, _) => badge.Opacity = 1.0;
+
+                badge.PreviewMouseLeftButtonDown += (s, e) =>
+                {
+                    e.Handled = true;
+                    node.IsExpanded = !node.IsExpanded;
+                    RenderInternal();
+                    StructureEdited?.Invoke();
+                };
+
+                double badgeLeft, badgeTop;
+                if (isVertical)
+                {
+                    badgeLeft = boxX + (BoxWidth - badgeWidth) / 2.0;
+                    badgeTop = boxY + BoxHeight - (badgeHeight / 2.0);
+                }
+                else
+                {
+                    badgeLeft = boxX + BoxWidth - (badgeWidth / 2.0);
+                    badgeTop = boxY + (BoxHeight - badgeHeight) / 2.0;
+                }
+
+                Canvas.SetLeft(badge, badgeLeft);
+                Canvas.SetTop(badge, badgeTop);
+                Canvas.SetZIndex(badge, 50);
+
+                RootCanvas.Children.Add(badge);
+            }
 
             if (node.IsEditing)
             {
                 BeginRename(node, box);
             }
         }
+
+        UpdateContainerAlignment();
     }
 
     private void EnsureDragGhostCreated()
@@ -1013,7 +1146,7 @@ public partial class OrgChartView : UserControl
 
         double LayoutNode(FolderNode node, int depth)
         {
-            if (node.Children.Count == 0)
+            if (node.Children.Count == 0 || !node.IsExpanded)
             {
                 double row = nextRow;
                 nextRow += 1;
@@ -1081,7 +1214,7 @@ public partial class OrgChartView : UserControl
 
         void DrawSvgConnectors(FolderNode node)
         {
-            if (!positions.TryGetValue(node, out var parentPos)) return;
+            if (!node.IsExpanded || !positions.TryGetValue(node, out var parentPos)) return;
 
             foreach (var child in node.Children)
             {
@@ -1140,6 +1273,23 @@ public partial class OrgChartView : UserControl
             sb.AppendLine("  <g>");
             sb.AppendLine($"    <rect x=\"{boxX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{boxY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{BoxWidth}\" height=\"{BoxHeight}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth.ToString("F1", CultureInfo.InvariantCulture)}\"/>");
             sb.AppendLine($"    <text x=\"{(boxX + BoxWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(boxY + BoxHeight / 2.0 + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
+
+            if (node.Children.Count > 0)
+            {
+                bool expanded = node.IsExpanded;
+                double badgeHeight = 16;
+                double badgeWidth = expanded ? 16 : Math.Max(22, 14 + node.Children.Count.ToString().Length * 6.5);
+                double badgeX = isVertical ? boxX + (BoxWidth - badgeWidth) / 2.0 : boxX + BoxWidth - (badgeWidth / 2.0);
+                double badgeY = isVertical ? boxY + BoxHeight - (badgeHeight / 2.0) : boxY + (BoxHeight - badgeHeight) / 2.0;
+                string badgeBg = expanded ? "#EEF2F6" : "#0F766E";
+                string badgeStroke = expanded ? "#64748B" : "#14B8A6";
+                string badgeFg = expanded ? "#334155" : "#FFFFFF";
+                string badgeLabel = expanded ? "−" : $"+{node.Children.Count}";
+
+                sb.AppendLine($"    <rect x=\"{badgeX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{badgeY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{badgeWidth.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{badgeHeight}\" rx=\"{badgeHeight / 2.0}\" ry=\"{badgeHeight / 2.0}\" fill=\"{badgeBg}\" stroke=\"{badgeStroke}\" stroke-width=\"1\"/>");
+                sb.AppendLine($"    <text x=\"{(badgeX + badgeWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(badgeY + badgeHeight / 2.0 + 3.5).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"{badgeFg}\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"9\" font-weight=\"bold\" text-anchor=\"middle\">{badgeLabel}</text>");
+            }
+
             sb.AppendLine("  </g>");
         }
 

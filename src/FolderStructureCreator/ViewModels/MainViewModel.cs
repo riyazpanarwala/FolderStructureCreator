@@ -255,6 +255,8 @@ public class MainViewModel : ViewModelBase
     private void RaiseStructureChanged()
     {
         StructureChanged?.Invoke();
+        ExpandAllOrgChartCommand?.RaiseCanExecuteChanged();
+        CollapseAllOrgChartCommand?.RaiseCanExecuteChanged();
     }
 
     public int TotalFolderCount => RootFolders.Sum(r => r.CountFoldersOnly());
@@ -420,6 +422,8 @@ public class MainViewModel : ViewModelBase
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
+    public RelayCommand ExpandAllOrgChartCommand { get; }
+    public RelayCommand CollapseAllOrgChartCommand { get; }
     public RelayCommand SetThemeCommand { get; }
     public RelayCommand ToggleCommandPaletteCommand { get; }
     public RelayCommand OpenCommandPaletteCommand { get; }
@@ -465,6 +469,8 @@ public class MainViewModel : ViewModelBase
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
         ToggleOrgChartLayoutCommand = new RelayCommand(_ => IsVerticalOrgChart = !IsVerticalOrgChart);
+        ExpandAllOrgChartCommand = new RelayCommand(_ => ExpandAllOrgChart(), _ => RootFolders.Count > 0);
+        CollapseAllOrgChartCommand = new RelayCommand(_ => CollapseAllOrgChart(), _ => RootFolders.Count > 0);
         ClearSearchCommand = new RelayCommand(_ => { SearchQuery = string.Empty; IsSearchDropdownOpen = false; });
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
@@ -1320,6 +1326,40 @@ public class MainViewModel : ViewModelBase
         RaiseStructureChanged();
     }
 
+    public void ExpandAllOrgChart()
+    {
+        void SetExpandedRecursive(FolderNode node, bool expanded)
+        {
+            node.IsExpanded = expanded;
+            foreach (var child in node.Children)
+                SetExpandedRecursive(child, expanded);
+        }
+
+        foreach (var root in RootFolders)
+            SetExpandedRecursive(root, true);
+
+        RaiseStructureChanged();
+    }
+
+    public void CollapseAllOrgChart()
+    {
+        void CollapseDescendants(FolderNode node)
+        {
+            node.IsExpanded = false;
+            foreach (var child in node.Children)
+                CollapseDescendants(child);
+        }
+
+        foreach (var root in RootFolders)
+        {
+            root.IsExpanded = true;
+            foreach (var child in root.Children)
+                CollapseDescendants(child);
+        }
+
+        RaiseStructureChanged();
+    }
+
     // ---- Structure creation on disk ----
 
     private bool CanCreateStructure() => TargetPathExists && RootFolders.Count > 0;
@@ -1395,6 +1435,8 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "🌲", ShowTreeViewCommand));
         AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "📊", ShowOrgChartViewCommand));
         AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "➡️", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Expand All Org Chart Folders", "Org Chart", "⊞", ExpandAllOrgChartCommand));
+        AllCommands.Add(new CommandItem("Collapse All Org Chart Folders", "Org Chart", "⊟", CollapseAllOrgChartCommand));
         AllCommands.Add(new CommandItem("Toggle Destination Sidebar", "Workspace", "📐", ToggleDestinationSidebarCommand));
 
         // Themes
