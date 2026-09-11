@@ -7,6 +7,7 @@
     <SolidColorBrush x:Key="BrushBorder" Color="#1E4755"/>
     <SolidColorBrush x:Key="BrushTextPrimary" Color="#F1F5F9"/>
     <SolidColorBrush x:Key="BrushTextSecondary" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="BrushPlaceholder" Color="#7E90A3"/>
     <SolidColorBrush x:Key="BrushAccent" Color="#14B8A6"/>
     <SolidColorBrush x:Key="BrushAccentHover" Color="#0D9488"/>
     <SolidColorBrush x:Key="BrushAccentSoft" Color="#0F3B43"/>
@@ -19,5 +20,9 @@
     <SolidColorBrush x:Key="BrushCardBg" Color="#132E38"/>
     <SolidColorBrush x:Key="BrushDropdownBg" Color="#132E38"/>
     <SolidColorBrush x:Key="BrushPrimaryBtnFg" Color="#0F172A"/>
+    <SolidColorBrush x:Key="BrushFolderIcon" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="BrushFocusRing" Color="#14B8A6"/>
+    <SolidColorBrush x:Key="BrushBadgeBg" Color="#163A47"/>
+    <SolidColorBrush x:Key="BrushBadgeFg" Color="#2DD4BF"/>
 
 </ResourceDictionary>

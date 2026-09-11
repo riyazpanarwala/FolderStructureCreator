@@ -500,4 +500,24 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
     }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.ContextMenu != null)
+        {
+            element.ContextMenu.PlacementTarget = element;
+            element.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            element.ContextMenu.IsOpen = true;
+        }
+    }
+
+    private void PlanOverflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.ContextMenu != null)
+        {
+            element.ContextMenu.PlacementTarget = element;
+            element.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            element.ContextMenu.IsOpen = true;
+        }
+    }
 }

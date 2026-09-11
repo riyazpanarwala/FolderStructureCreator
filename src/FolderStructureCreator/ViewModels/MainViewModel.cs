@@ -101,19 +101,25 @@ public class MainViewModel : ViewModelBase
     /// <summary>True once text is typed in the quick-add box - drives whether the "Add as children" button is shown.</summary>
     public bool HasQuickAddText => !string.IsNullOrWhiteSpace(QuickAddNames);
 
-    private string _statusMessage = "Build a structure on the right, choose a target folder on the left, then click Create Structure.";
+    private string _statusMessage = "Build a folder plan on the right, choose a destination on the left, then click Create folders.";
     public string StatusMessage
     {
         get => _statusMessage;
         set => SetField(ref _statusMessage, value);
     }
 
-    private bool _isLiveSyncMode = false;
+    private bool _isLiveSyncMode = true;
     /// <summary>When true, folder additions, renames, deletions (Recycle Bin), and moves immediately modify physical folders on disk.</summary>
     public bool IsLiveSyncMode
     {
         get => _isLiveSyncMode;
-        set => SetField(ref _isLiveSyncMode, value);
+        set
+        {
+            if (SetField(ref _isLiveSyncMode, value))
+            {
+                StatusMessage = value ? "Live disk sync enabled: folder actions will directly modify disk." : "Live disk sync disabled.";
+            }
+        }
     }
 
     private bool _enableIgnoreRules = true;
@@ -121,7 +127,13 @@ public class MainViewModel : ViewModelBase
     public bool EnableIgnoreRules
     {
         get => _enableIgnoreRules;
-        set => SetField(ref _enableIgnoreRules, value);
+        set
+        {
+            if (SetField(ref _enableIgnoreRules, value))
+            {
+                StatusMessage = value ? "Smart ignore rules enabled (.structureignore & build folders ignored)." : "Smart ignore rules disabled (all folders will be included).";
+            }
+        }
     }
 
     private bool _isOrgChartView;
@@ -151,7 +163,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Layout: Vertical ⬇" : "Layout: Horizontal ➡️";
+    public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Vertical" : "Horizontal";
 
 
     private bool _isDestinationSidebarCollapsed;
@@ -182,7 +194,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public string SortToggleText => IsSortAscending ? "Sort: A-Z ⬇" : "Sort: Z-A ⬆";
+    public string SortToggleText => IsSortAscending ? "A–Z" : "Z–A";
 
     /// <summary>Called by the window when it is first shown and whenever it is resized.</summary>
     public void UpdateWindowWidth(double width)
@@ -936,8 +948,8 @@ public class MainViewModel : ViewModelBase
         else if (!existsOnDisk)
         {
             var confirm = MessageBox.Show(
-                $"Delete \"{node.Name}\" and everything nested under it from the blueprint?",
-                "Confirm delete",
+                $"Delete \"{node.Name}\" and everything nested under it from the folder plan?",
+                "Confirm Delete",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
@@ -1467,36 +1479,36 @@ public class MainViewModel : ViewModelBase
     private void InitializeCommandPaletteRegistry()
     {
         AllCommands.Clear();
-        // Plan & Blueprint Actions
-        AllCommands.Add(new CommandItem("Add Root Folder", "Blueprint", "➕", AddRootFolderCommand, "Ctrl+N"));
-        AllCommands.Add(new CommandItem("Import Reference Folder", "Blueprint", "📥", ImportFromReferenceCommand, "Ctrl+I"));
-        AllCommands.Add(new CommandItem("Export Standalone Script (.ps1, .bat, .sh)", "Export", "📜", new RelayCommand(_ => RequestExportScript?.Invoke())));
-        AllCommands.Add(new CommandItem("Clear Blueprint Plan", "Blueprint", "🗑️", ClearPlanCommand));
+        // Folder Plan Actions
+        AllCommands.Add(new CommandItem("Add Root Folder", "Folder Plan", "+", AddRootFolderCommand, "Ctrl+N"));
+        AllCommands.Add(new CommandItem("Import Folder", "Folder Plan", "↓", ImportFromReferenceCommand, "Ctrl+I"));
+        AllCommands.Add(new CommandItem("Export Standalone Script (.ps1, .bat, .sh)", "Export", "↗", new RelayCommand(_ => RequestExportScript?.Invoke())));
+        AllCommands.Add(new CommandItem("Clear Folder Plan", "Folder Plan", "×", ClearPlanCommand));
 
         // Views & Layout
-        AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "🌲", ShowTreeViewCommand));
-        AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "📊", ShowOrgChartViewCommand));
-        AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "➡️", ToggleOrgChartLayoutCommand));
-        AllCommands.Add(new CommandItem("Expand All Org Chart Folders", "Org Chart", "⊞", ExpandAllOrgChartCommand));
-        AllCommands.Add(new CommandItem("Collapse All Org Chart Folders", "Org Chart", "⊟", CollapseAllOrgChartCommand));
-        AllCommands.Add(new CommandItem("Expand All Tree View Folders", "Tree View", "⊞", ExpandAllTreeCommand));
-        AllCommands.Add(new CommandItem("Collapse All Tree View Folders", "Tree View", "⊟", CollapseAllTreeCommand));
-        AllCommands.Add(new CommandItem("Toggle Destination Sidebar", "Workspace", "📐", ToggleDestinationSidebarCommand));
+        AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "≡", ShowTreeViewCommand));
+        AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "☵", ShowOrgChartViewCommand));
+        AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "⇄", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Expand All Chart Folders", "Org Chart", "⊞", ExpandAllOrgChartCommand));
+        AllCommands.Add(new CommandItem("Collapse All Chart Folders", "Org Chart", "⊟", CollapseAllOrgChartCommand));
+        AllCommands.Add(new CommandItem("Expand All Tree Folders", "Tree View", "⊞", ExpandAllTreeCommand));
+        AllCommands.Add(new CommandItem("Collapse All Tree Folders", "Tree View", "⊟", CollapseAllTreeCommand));
+        AllCommands.Add(new CommandItem("Toggle Destination Sidebar", "Workspace", "◫", ToggleDestinationSidebarCommand));
 
-        // Themes
-        AllCommands.Add(new CommandItem("Switch Theme: Dark Mode", "Appearance", "🌙", SetThemeCommand, commandParameter: AppTheme.Dark));
-        AllCommands.Add(new CommandItem("Switch Theme: Light Mode", "Appearance", "☀️", SetThemeCommand, commandParameter: AppTheme.Light));
-        AllCommands.Add(new CommandItem("Switch Theme: High Contrast Mode", "Appearance", "🔲", SetThemeCommand, commandParameter: AppTheme.HighContrast));
+        // Appearance
+        AllCommands.Add(new CommandItem("Switch Theme: Dark Mode", "Appearance", "●", SetThemeCommand, commandParameter: AppTheme.Dark));
+        AllCommands.Add(new CommandItem("Switch Theme: Light Mode", "Appearance", "○", SetThemeCommand, commandParameter: AppTheme.Light));
+        AllCommands.Add(new CommandItem("Switch Theme: High Contrast Mode", "Appearance", "◐", SetThemeCommand, commandParameter: AppTheme.HighContrast));
         AllCommands.Add(new CommandItem("Switch Theme: Windows System Match", "Appearance", "💻", SetThemeCommand, commandParameter: AppTheme.System));
 
         // Options & Diff
-        AllCommands.Add(new CommandItem("Compare Blueprint with Physical Disk (Diff)", "Analytics", "🔍", CompareBlueprintWithDiskCommand));
-        AllCommands.Add(new CommandItem("Create Missing Blueprint Folders Only", "Blueprint", "🚀", CreateMissingFoldersOnlyCommand));
-        AllCommands.Add(new CommandItem("Toggle Live Computer Sync Mode", "Options", "🔄", new RelayCommand(_ => IsLiveSyncMode = !IsLiveSyncMode)));
-        AllCommands.Add(new CommandItem("Toggle Smart Ignore Rules (.structureignore)", "Options", "🚫", new RelayCommand(_ => EnableIgnoreRules = !EnableIgnoreRules)));
-        AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Browser", "🔀", ToggleSortOrderCommand));
-        AllCommands.Add(new CommandItem("Refresh Real Computer Drives", "Browser", "🔄", RefreshDrivesCommand));
-        AllCommands.Add(new CommandItem("Open Selected Drive Folder in Explorer", "Browser", "📂", OpenSelectedFolderInExplorerCommand));
+        AllCommands.Add(new CommandItem("Compare Plan with Destination (Diff)", "Diff", "◩", CompareBlueprintWithDiskCommand));
+        AllCommands.Add(new CommandItem("Create Missing Folders Only", "Folder Plan", "✓", CreateMissingFoldersOnlyCommand));
+        AllCommands.Add(new CommandItem("Toggle Live Disk Sync", "Settings", "↻", new RelayCommand(_ => IsLiveSyncMode = !IsLiveSyncMode)));
+        AllCommands.Add(new CommandItem("Toggle Smart Ignore Rules", "Settings", "⊘", new RelayCommand(_ => EnableIgnoreRules = !EnableIgnoreRules)));
+        AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Destination", "⇅", ToggleSortOrderCommand));
+        AllCommands.Add(new CommandItem("Refresh Destination Drives", "Destination", "↻", RefreshDrivesCommand));
+        AllCommands.Add(new CommandItem("Open Selected Folder in Explorer", "Destination", "↗", OpenSelectedFolderInExplorerCommand));
 
         ApplyCommandPaletteFilter();
     }

@@ -20,7 +20,7 @@
                 <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.4" Color="#000000"/>
             </Border.Effect>
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="🎯 Drop here to move folder to Root level" FontSize="12.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                <TextBlock Text="Drop here to move folder to Root level" FontSize="12.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 

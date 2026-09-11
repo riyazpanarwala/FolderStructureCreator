@@ -937,21 +937,44 @@ public partial class OrgChartView : UserControl
             };
 
             var menu = new ContextMenu { PlacementTarget = box };
-            var openInExplorerItem = new MenuItem { Header = "📂 Open in Explorer" };
+            var openInExplorerItem = new MenuItem
+            {
+                Header = "Open in Explorer",
+                Icon = CreateMenuItemIcon("ExplorerGeometry")
+            };
             openInExplorerItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 OpenInExplorerRequested?.Invoke(node);
             };
 
-            var addChildItem = new MenuItem { Header = "➕ Add child" };
+            var focusItem = new MenuItem
+            {
+                Header = "Focus Folder (Fit Selection)",
+                Icon = CreateMenuItemIcon("FitGeometry")
+            };
+            focusItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                FitSelectedToView();
+            };
+
+            var addChildItem = new MenuItem
+            {
+                Header = "Add Child Folder",
+                Icon = CreateMenuItemIcon("PlusGeometry")
+            };
             addChildItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 AddChildRequested?.Invoke(node);
             };
 
-            var addSiblingItem = new MenuItem { Header = "📄 Add sibling" };
+            var addSiblingItem = new MenuItem
+            {
+                Header = "Add Sibling Folder",
+                Icon = CreateMenuItemIcon("FolderGeometry")
+            };
             addSiblingItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
@@ -961,7 +984,11 @@ public partial class OrgChartView : UserControl
             MenuItem? moveToRootItem = null;
             if (node.Parent != null)
             {
-                moveToRootItem = new MenuItem { Header = "⬆️ Move to Root" };
+                moveToRootItem = new MenuItem
+                {
+                    Header = "Move to Root",
+                    Icon = CreateMenuItemIcon("ArrowUpGeometry")
+                };
                 moveToRootItem.Click += (_, _) =>
                 {
                     NodeClicked?.Invoke(node);
@@ -969,23 +996,21 @@ public partial class OrgChartView : UserControl
                 };
             }
 
-            var renameItem = new MenuItem { Header = "✏️ Rename" };
+            var renameItem = new MenuItem
+            {
+                Header = "Rename",
+                Icon = CreateMenuItemIcon("EditGeometry")
+            };
             renameItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 BeginRename(node, box);
             };
 
-            var focusItem = new MenuItem { Header = "🔍 Focus folder (Fit selection)" };
-            focusItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                FitSelectedToView();
-            };
-
             var deleteItem = new MenuItem
             {
-                Header = "🗑️ Delete"
+                Header = "Delete",
+                Icon = CreateMenuItemIcon("TrashGeometry", "BrushDanger")
             };
             deleteItem.SetResourceReference(MenuItem.ForegroundProperty, "BrushDanger");
             deleteItem.Click += (_, _) =>
@@ -1011,7 +1036,8 @@ public partial class OrgChartView : UserControl
             {
                 var toggleExpandItem = new MenuItem
                 {
-                    Header = node.IsExpanded ? "⊟ Collapse subfolders" : $"⊞ Expand ({node.Children.Count} subfolders)"
+                    Header = node.IsExpanded ? "Collapse Subfolders" : $"Expand ({node.Children.Count} Subfolders)",
+                    Icon = CreateMenuItemIcon(node.IsExpanded ? "CollapseGeometry" : "ExpandGeometry")
                 };
                 toggleExpandItem.Click += (_, _) =>
                 {
@@ -1545,5 +1571,29 @@ public partial class OrgChartView : UserControl
     }
 
     #endregion
+
+    private static System.Windows.Shapes.Path CreateMenuItemIcon(string geometryResourceKey, string? brushResourceKey = null)
+    {
+        var path = new System.Windows.Shapes.Path
+        {
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        if (Application.Current?.TryFindResource(geometryResourceKey) is Geometry geom)
+        {
+            path.Data = geom;
+        }
+
+        path.SetResourceReference(Shape.StrokeProperty, brushResourceKey ?? "BrushTextSecondary");
+        return path;
+    }
 }
 
