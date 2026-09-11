@@ -81,8 +81,10 @@ public partial class OrgChartView : UserControl
 
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
+    private const double PeachBoxHeight = 26;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns (Horizontal mode)
-    private const double RowHeight = 46;   // vertical spacing between sibling rows (Horizontal mode)
+    private const double MinVerticalSpacing = 12; // vertical spacing between adjacent boxes
+    private const double MinHorizontalSpacing = 16;
     private const double ChartPadding = 24;
 
     // Depth-based palette, cycling if the tree goes deeper than the list - loosely matches the
@@ -222,8 +224,8 @@ public partial class OrgChartView : UserControl
             double left = Canvas.GetLeft(box) * scale;
             double top = Canvas.GetTop(box) * scale;
 
-            double boxWidthScaled = BoxWidth * scale;
-            double boxHeightScaled = BoxHeight * scale;
+            double boxWidthScaled = (box.Width > 0 ? box.Width : BoxWidth) * scale;
+            double boxHeightScaled = (box.Height > 0 ? box.Height : BoxHeight) * scale;
 
             double viewportWidth = ChartScrollViewer.ViewportWidth;
             double viewportHeight = ChartScrollViewer.ViewportHeight;
@@ -382,6 +384,312 @@ public partial class OrgChartView : UserControl
             : VerticalAlignment.Top;
     }
 
+    private sealed class NodeLayoutInfo
+    {
+        public FolderNode Node { get; init; } = null!;
+        public int Depth { get; init; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double CenterX => X + Width / 2.0;
+        public double CenterY => Y + Height / 2.0;
+    }
+
+    private static bool IsPeachNode(int depth) => (depth % Palette.Length) == 1;
+
+    private static double MeasureTextWidth(string text, double fontSize, FontWeight fontWeight)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var typeface = new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, fontWeight, FontStretches.Normal);
+        var formattedText = new FormattedText(
+            text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            Brushes.Black,
+            1.0);
+        return formattedText.WidthIncludingTrailingWhitespace;
+    }
+
+    private static (double Width, double Height) GetNodeDimensions(FolderNode node, int depth)
+    {
+        bool isPeach = IsPeachNode(depth);
+
+        double height;
+        if (isPeach)
+        {
+            // Peach/red boxes: reduced top & bottom padding so they are more compact vertically
+            height = node.HasDiffBadge ? 34.0 : PeachBoxHeight;
+        }
+        else
+        {
+            height = node.HasDiffBadge ? 36.0 : BoxHeight;
+        }
+
+        double width;
+        if (isPeach)
+        {
+            if (node.Children.Count > 0)
+            {
+                // Has child folders/nodes: keep enough width to clearly represent parent-child hierarchy and connector lines
+                width = BoxWidth;
+            }
+            else
+            {
+                // No child folders/nodes: reduce width dynamically based on content with reasonable minimum padding
+                double textWidth = MeasureTextWidth(node.Name, 11.5, FontWeights.SemiBold);
+                const double horizontalPadding = 24.0; // 12px padding on each side
+                const double minWidth = 70.0;
+                width = Math.Clamp(Math.Ceiling(textWidth + horizontalPadding), minWidth, BoxWidth);
+            }
+        }
+        else
+        {
+            width = BoxWidth;
+        }
+
+        return (width, height);
+    }
+
+    private static void ShiftSubtree(FolderNode node, double deltaX, double deltaY, Dictionary<FolderNode, NodeLayoutInfo> map)
+    {
+        if (map.TryGetValue(node, out var info))
+        {
+            info.X += deltaX;
+            info.Y += deltaY;
+        }
+        if (node.IsExpanded)
+        {
+            foreach (var child in node.Children)
+            {
+                if (map.ContainsKey(child))
+                {
+                    ShiftSubtree(child, deltaX, deltaY, map);
+                }
+            }
+        }
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeLayout(IReadOnlyList<FolderNode> roots, bool isVertical)
+    {
+        var layoutMap = new Dictionary<FolderNode, NodeLayoutInfo>();
+        if (roots.Count == 0) return layoutMap;
+
+        if (!isVertical)
+        {
+            // HORIZONTAL LAYOUT (Left to right dendrogram)
+            double currentY = ChartPadding;
+
+            void LayoutNodeH(FolderNode node, int depth)
+            {
+                var (w, h) = GetNodeDimensions(node, depth);
+                var info = new NodeLayoutInfo
+                {
+                    Node = node,
+                    Depth = depth,
+                    Width = w,
+                    Height = h,
+                    X = ChartPadding + depth * (BoxWidth + ColumnGap)
+                };
+                layoutMap[node] = info;
+
+                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
+                    ? node.Children
+                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
+
+                if (visibleChildren.Count == 0)
+                {
+                    info.Y = currentY;
+                    currentY += h + MinVerticalSpacing;
+                }
+                else
+                {
+                    foreach (var child in visibleChildren)
+                    {
+                        LayoutNodeH(child, depth + 1);
+                    }
+
+                    double firstCenterY = layoutMap[visibleChildren[0]].CenterY;
+                    double lastCenterY = layoutMap[visibleChildren[^1]].CenterY;
+                    double desiredCenterY = (firstCenterY + lastCenterY) / 2.0;
+                    info.Y = desiredCenterY - h / 2.0;
+                }
+            }
+
+            foreach (var root in roots)
+            {
+                LayoutNodeH(root, 0);
+            }
+
+            // Guarantee no two boxes overlap at the same depth column
+            bool adjusted = true;
+            int passes = 0;
+            while (adjusted && passes++ < 30)
+            {
+                adjusted = false;
+                var byDepth = layoutMap.Values.GroupBy(x => x.Depth).OrderBy(g => g.Key);
+                foreach (var group in byDepth)
+                {
+                    var sorted = group.OrderBy(x => x.Y).ToList();
+                    for (int i = 0; i < sorted.Count - 1; i++)
+                    {
+                        var a = sorted[i];
+                        var b = sorted[i + 1];
+                        double requiredMinY = a.Y + a.Height + MinVerticalSpacing;
+                        if (b.Y < requiredMinY)
+                        {
+                            double shift = requiredMinY - b.Y;
+                            ShiftSubtree(b.Node, 0, shift, layoutMap);
+                            adjusted = true;
+                        }
+                    }
+                }
+
+                // Re-center parents over visible children
+                foreach (var info in layoutMap.Values)
+                {
+                    if (info.Node.IsExpanded && info.Node.Children.Count > 0)
+                    {
+                        var children = info.Node.Children.Where(c => layoutMap.ContainsKey(c)).ToList();
+                        if (children.Count > 0)
+                        {
+                            double firstCenterY = layoutMap[children[0]].CenterY;
+                            double lastCenterY = layoutMap[children[^1]].CenterY;
+                            double desiredCenterY = (firstCenterY + lastCenterY) / 2.0;
+                            double desiredY = desiredCenterY - info.Height / 2.0;
+                            if (Math.Abs(desiredY - info.Y) > 0.01)
+                            {
+                                info.Y = desiredY;
+                                adjusted = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Normalize so top-most node is anchored cleanly at ChartPadding
+            if (layoutMap.Count > 0)
+            {
+                double minY = layoutMap.Values.Min(i => i.Y);
+                double offsetY = ChartPadding - minY;
+                if (Math.Abs(offsetY) > 0.01)
+                {
+                    foreach (var info in layoutMap.Values)
+                        info.Y += offsetY;
+                }
+            }
+        }
+        else
+        {
+            // VERTICAL LAYOUT (Top to bottom tree)
+            const double levelHeight = BoxHeight + 46;
+            double currentX = ChartPadding;
+
+            void LayoutNodeV(FolderNode node, int depth)
+            {
+                var (w, h) = GetNodeDimensions(node, depth);
+                var info = new NodeLayoutInfo
+                {
+                    Node = node,
+                    Depth = depth,
+                    Width = w,
+                    Height = h,
+                    Y = ChartPadding + depth * levelHeight
+                };
+                layoutMap[node] = info;
+
+                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
+                    ? node.Children
+                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
+
+                if (visibleChildren.Count == 0)
+                {
+                    info.X = currentX;
+                    currentX += w + MinHorizontalSpacing;
+                }
+                else
+                {
+                    foreach (var child in visibleChildren)
+                    {
+                        LayoutNodeV(child, depth + 1);
+                    }
+
+                    double firstCenterX = layoutMap[visibleChildren[0]].CenterX;
+                    double lastCenterX = layoutMap[visibleChildren[^1]].CenterX;
+                    double desiredCenterX = (firstCenterX + lastCenterX) / 2.0;
+                    info.X = desiredCenterX - w / 2.0;
+                }
+            }
+
+            foreach (var root in roots)
+            {
+                LayoutNodeV(root, 0);
+            }
+
+            // Guarantee no two boxes overlap at the same depth level horizontally
+            bool adjusted = true;
+            int passes = 0;
+            while (adjusted && passes++ < 30)
+            {
+                adjusted = false;
+                var byDepth = layoutMap.Values.GroupBy(x => x.Depth).OrderBy(g => g.Key);
+                foreach (var group in byDepth)
+                {
+                    var sorted = group.OrderBy(x => x.X).ToList();
+                    for (int i = 0; i < sorted.Count - 1; i++)
+                    {
+                        var a = sorted[i];
+                        var b = sorted[i + 1];
+                        double requiredMinX = a.X + a.Width + MinHorizontalSpacing;
+                        if (b.X < requiredMinX)
+                        {
+                            double shift = requiredMinX - b.X;
+                            ShiftSubtree(b.Node, shift, 0, layoutMap);
+                            adjusted = true;
+                        }
+                    }
+                }
+
+                // Re-center parents horizontally over visible children
+                foreach (var info in layoutMap.Values)
+                {
+                    if (info.Node.IsExpanded && info.Node.Children.Count > 0)
+                    {
+                        var children = info.Node.Children.Where(c => layoutMap.ContainsKey(c)).ToList();
+                        if (children.Count > 0)
+                        {
+                            double firstCenterX = layoutMap[children[0]].CenterX;
+                            double lastCenterX = layoutMap[children[^1]].CenterX;
+                            double desiredCenterX = (firstCenterX + lastCenterX) / 2.0;
+                            double desiredX = desiredCenterX - info.Width / 2.0;
+                            if (Math.Abs(desiredX - info.X) > 0.01)
+                            {
+                                info.X = desiredX;
+                                adjusted = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Normalize so left-most node is anchored cleanly at ChartPadding
+            if (layoutMap.Count > 0)
+            {
+                double minX = layoutMap.Values.Min(i => i.X);
+                double offsetX = ChartPadding - minX;
+                if (Math.Abs(offsetX) > 0.01)
+                {
+                    foreach (var info in layoutMap.Values)
+                        info.X += offsetX;
+                }
+            }
+        }
+
+        return layoutMap;
+    }
+
     private void RenderInternal()
     {
         RootCanvas.Children.Clear();
@@ -394,124 +702,47 @@ public partial class OrgChartView : UserControl
             return;
         }
 
-        // ---- Layout pass: assign every node a fractional "row" via post-order DFS so a parent
-        // ends up centered over its children (classic dendrogram layout). ----
-        double nextRow = 0;
-        var positions = new Dictionary<FolderNode, (double Row, int Depth)>();
-
-        double LayoutNode(FolderNode node, int depth)
-        {
-            if (node.Children.Count == 0 || !node.IsExpanded)
-            {
-                double row = nextRow;
-                nextRow += 1;
-                positions[node] = (row, depth);
-                return row;
-            }
-
-            double first = -1, last = -1;
-            foreach (var child in node.Children)
-            {
-                var r = LayoutNode(child, depth + 1);
-                if (first < 0) first = r;
-                last = r;
-            }
-
-            double center = (first + last) / 2.0;
-            positions[node] = (center, depth);
-            return center;
-        }
-
-        foreach (var root in _lastRoots)
-            LayoutNode(root, 0);
-
-        int maxDepth = positions.Count > 0 ? positions.Values.Max(p => p.Depth) : 0;
-
         bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
-        const double siblingWidth = BoxWidth + 20; // X spacing per sibling column in vertical mode
-        const double levelHeight = BoxHeight + 46; // Y spacing per depth level in vertical mode
+        var layoutMap = ComputeLayout(_lastRoots, isVertical);
 
-        double maxX = 0;
-        double maxY = 0;
-        foreach (var (node, pos) in positions)
-        {
-            double right, bottom;
-            if (isVertical)
-            {
-                right = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 + BoxWidth / 2.0;
-                bottom = ChartPadding + pos.Depth * levelHeight + BoxHeight;
-            }
-            else
-            {
-                right = ChartPadding + pos.Depth * (BoxWidth + ColumnGap) + BoxWidth;
-                bottom = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 + BoxHeight / 2.0;
-            }
-            if (right > maxX) maxX = right;
-            if (bottom > maxY) maxY = bottom;
-        }
+        double maxX = layoutMap.Values.Max(info => info.X + info.Width);
+        double maxY = layoutMap.Values.Max(info => info.Y + info.Height);
 
         RootCanvas.Width = Math.Max(maxX + ChartPadding, 100);
         RootCanvas.Height = Math.Max(maxY + ChartPadding, 100);
 
-        (double X, double Y) GetParentConnectionPoint(double row, int depth)
-        {
-            if (isVertical)
-            {
-                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
-                double y = ChartPadding + depth * levelHeight + BoxHeight;
-                return (x, y);
-            }
-            else
-            {
-                double x = ChartPadding + depth * (BoxWidth + ColumnGap) + BoxWidth;
-                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
-                return (x, y);
-            }
-        }
-
-        (double X, double Y) GetChildConnectionPoint(double row, int depth)
-        {
-            if (isVertical)
-            {
-                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
-                double y = ChartPadding + depth * levelHeight;
-                return (x, y);
-            }
-            else
-            {
-                double x = ChartPadding + depth * (BoxWidth + ColumnGap);
-                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
-                return (x, y);
-            }
-        }
-
         // ---- Connectors first, so node boxes visually sit on top of the lines. ----
         void DrawConnectors(FolderNode node)
         {
-            if (!node.IsExpanded || !positions.TryGetValue(node, out var parentPos)) return;
+            if (!node.IsExpanded || !layoutMap.TryGetValue(node, out var parentLayout)) return;
 
             foreach (var child in node.Children)
             {
-                if (!positions.TryGetValue(child, out var childPos)) continue;
+                if (!layoutMap.TryGetValue(child, out var childLayout)) continue;
 
-                var (px, py) = GetParentConnectionPoint(parentPos.Row, parentPos.Depth);
-                var (cx, cy) = GetChildConnectionPoint(childPos.Row, childPos.Depth);
+                Point startPoint = isVertical
+                    ? new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height)
+                    : new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
 
-                var figure = new PathFigure { StartPoint = new Point(px, py) };
+                Point endPoint = isVertical
+                    ? new Point(childLayout.CenterX, childLayout.Y)
+                    : new Point(childLayout.X, childLayout.CenterY);
+
+                var figure = new PathFigure { StartPoint = startPoint };
 
                 if (isVertical)
                 {
-                    double midY = (py + cy) / 2.0;
-                    figure.Segments.Add(new LineSegment(new Point(px, midY), true));
-                    figure.Segments.Add(new LineSegment(new Point(cx, midY), true));
-                    figure.Segments.Add(new LineSegment(new Point(cx, cy), true));
+                    double midY = (startPoint.Y + endPoint.Y) / 2.0;
+                    figure.Segments.Add(new LineSegment(new Point(startPoint.X, midY), true));
+                    figure.Segments.Add(new LineSegment(new Point(endPoint.X, midY), true));
+                    figure.Segments.Add(new LineSegment(endPoint, true));
                 }
                 else
                 {
-                    double midX = (px + cx) / 2.0;
-                    figure.Segments.Add(new LineSegment(new Point(midX, py), true));
-                    figure.Segments.Add(new LineSegment(new Point(midX, cy), true));
-                    figure.Segments.Add(new LineSegment(new Point(cx, cy), true));
+                    double midX = (startPoint.X + endPoint.X) / 2.0;
+                    figure.Segments.Add(new LineSegment(new Point(midX, startPoint.Y), true));
+                    figure.Segments.Add(new LineSegment(new Point(midX, endPoint.Y), true));
+                    figure.Segments.Add(new LineSegment(endPoint, true));
                 }
 
                 var geometry = new PathGeometry();
@@ -520,7 +751,7 @@ public partial class OrgChartView : UserControl
                 RootCanvas.Children.Add(new System.Windows.Shapes.Path
                 {
                     Data = geometry,
-                    Stroke = new SolidColorBrush(GetPalette(childPos.Depth).Border),
+                    Stroke = new SolidColorBrush(GetPalette(childLayout.Depth).Border),
                     StrokeThickness = 1.6
                 });
 
@@ -532,9 +763,10 @@ public partial class OrgChartView : UserControl
             DrawConnectors(root);
 
         // ---- Node boxes. ----
-        foreach (var (node, pos) in positions)
+        foreach (var info in layoutMap.Values)
         {
-            var (fill, border) = GetPalette(pos.Depth);
+            var node = info.Node;
+            var (fill, border) = GetPalette(info.Depth);
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
@@ -583,7 +815,11 @@ public partial class OrgChartView : UserControl
                 Foreground = textForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(6, 0, (node.Children.Count > 0 && !isVertical ? 15 : 6), (node.Children.Count > 0 && isVertical ? 6 : 0))
+                Margin = new Thickness(
+                    6,
+                    0,
+                    (node.Children.Count > 0 && !isVertical ? 15 : 6),
+                    (node.Children.Count > 0 && isVertical ? 6 : 0))
             });
 
             if (node.HasDiffBadge)
@@ -601,8 +837,8 @@ public partial class OrgChartView : UserControl
 
             var box = new Border
             {
-                Width = BoxWidth,
-                Height = BoxHeight,
+                Width = info.Width,
+                Height = info.Height,
                 Background = boxBackground,
                 BorderBrush = boxBorderBrush,
                 BorderThickness = new Thickness((isSelected || isMatch || node.HasDiffBadge) ? 2.5 : 1),
@@ -612,20 +848,8 @@ public partial class OrgChartView : UserControl
                 Child = boxStack
             };
 
-            double boxX, boxY;
-            if (isVertical)
-            {
-                boxX = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 - BoxWidth / 2.0;
-                boxY = ChartPadding + pos.Depth * levelHeight;
-            }
-            else
-            {
-                boxX = ChartPadding + pos.Depth * (BoxWidth + ColumnGap);
-                boxY = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 - BoxHeight / 2.0;
-            }
-
-            Canvas.SetLeft(box, boxX);
-            Canvas.SetTop(box, boxY);
+            Canvas.SetLeft(box, info.X);
+            Canvas.SetTop(box, info.Y);
 
             _boxMap[box] = node;
 
@@ -712,22 +936,22 @@ public partial class OrgChartView : UserControl
                 NodeClicked?.Invoke(node);
             };
 
-            var menu = new ContextMenu();
-            var openInExplorerItem = new MenuItem { Header = "Open in Explorer" };
+            var menu = new ContextMenu { PlacementTarget = box };
+            var openInExplorerItem = new MenuItem { Header = "📂 Open in Explorer" };
             openInExplorerItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 OpenInExplorerRequested?.Invoke(node);
             };
 
-            var addChildItem = new MenuItem { Header = "Add child" };
+            var addChildItem = new MenuItem { Header = "➕ Add child" };
             addChildItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 AddChildRequested?.Invoke(node);
             };
 
-            var addSiblingItem = new MenuItem { Header = "Add sibling" };
+            var addSiblingItem = new MenuItem { Header = "📄 Add sibling" };
             addSiblingItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
@@ -737,7 +961,7 @@ public partial class OrgChartView : UserControl
             MenuItem? moveToRootItem = null;
             if (node.Parent != null)
             {
-                moveToRootItem = new MenuItem { Header = "Move to Root" };
+                moveToRootItem = new MenuItem { Header = "⬆️ Move to Root" };
                 moveToRootItem.Click += (_, _) =>
                 {
                     NodeClicked?.Invoke(node);
@@ -745,14 +969,14 @@ public partial class OrgChartView : UserControl
                 };
             }
 
-            var renameItem = new MenuItem { Header = "Rename" };
+            var renameItem = new MenuItem { Header = "✏️ Rename" };
             renameItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
                 BeginRename(node, box);
             };
 
-            var focusItem = new MenuItem { Header = "Focus folder (Fit selection)" };
+            var focusItem = new MenuItem { Header = "🔍 Focus folder (Fit selection)" };
             focusItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);
@@ -761,8 +985,8 @@ public partial class OrgChartView : UserControl
 
             var deleteItem = new MenuItem
             {
-                Header = "Delete",
-                Foreground = new SolidColorBrush(Color.FromRgb(0xBE, 0x12, 0x3C))
+                Header = "🗑️ Delete",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71))
             };
             deleteItem.Click += (_, _) =>
             {
@@ -854,13 +1078,13 @@ public partial class OrgChartView : UserControl
                 double badgeLeft, badgeTop;
                 if (isVertical)
                 {
-                    badgeLeft = boxX + (BoxWidth - badgeWidth) / 2.0;
-                    badgeTop = boxY + BoxHeight - (badgeHeight / 2.0);
+                    badgeLeft = info.CenterX - badgeWidth / 2.0;
+                    badgeTop = info.Y + info.Height - (badgeHeight / 2.0);
                 }
                 else
                 {
-                    badgeLeft = boxX + BoxWidth - (badgeWidth / 2.0);
-                    badgeTop = boxY + (BoxHeight - badgeHeight) / 2.0;
+                    badgeLeft = info.X + info.Width - (badgeWidth / 2.0);
+                    badgeTop = info.CenterY - (badgeHeight / 2.0);
                 }
 
                 Canvas.SetLeft(badge, badgeLeft);
@@ -883,12 +1107,17 @@ public partial class OrgChartView : UserControl
     {
         if (_draggedNode == null) return;
 
+        int depth = 0;
+        var p = _draggedNode.Parent;
+        while (p != null) { depth++; p = p.Parent; }
+        var (gw, gh) = GetNodeDimensions(_draggedNode, depth);
+
         if (_dragGhostBorder == null)
         {
             _dragGhostBorder = new Border
             {
-                Width = BoxWidth,
-                Height = BoxHeight,
+                Width = gw,
+                Height = gh,
                 Background = new SolidColorBrush(Color.FromArgb(0xD8, 0xE2, 0xE8, 0xF0)),
                 BorderBrush = DragHoverBrush,
                 BorderThickness = new Thickness(2),
@@ -911,6 +1140,8 @@ public partial class OrgChartView : UserControl
         }
         else
         {
+            _dragGhostBorder.Width = gw;
+            _dragGhostBorder.Height = gh;
             if (_dragGhostBorder.Child is TextBlock tb)
                 tb.Text = _draggedNode.Name;
         }
@@ -1021,8 +1252,8 @@ public partial class OrgChartView : UserControl
 
         var editBox = new TextBox
         {
-            Width = BoxWidth,
-            Height = BoxHeight,
+            Width = box.Width,
+            Height = box.Height,
             Text = node.Name,
             FontSize = 11.5,
             VerticalContentAlignment = VerticalAlignment.Center,
@@ -1137,73 +1368,13 @@ public partial class OrgChartView : UserControl
         if (_lastRoots.Count == 0 || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
             throw new InvalidOperationException("Diagram canvas is empty.");
 
+        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
+        var layoutMap = ComputeLayout(_lastRoots, isVertical);
+        if (layoutMap.Count == 0)
+            throw new InvalidOperationException("Diagram canvas is empty.");
+
         double width = RootCanvas.Width;
         double height = RootCanvas.Height;
-        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
-
-        double nextRow = 0;
-        var positions = new Dictionary<FolderNode, (double Row, int Depth)>();
-
-        double LayoutNode(FolderNode node, int depth)
-        {
-            if (node.Children.Count == 0 || !node.IsExpanded)
-            {
-                double row = nextRow;
-                nextRow += 1;
-                positions[node] = (row, depth);
-                return row;
-            }
-
-            double first = -1, last = -1;
-            foreach (var child in node.Children)
-            {
-                var r = LayoutNode(child, depth + 1);
-                if (first < 0) first = r;
-                last = r;
-            }
-
-            double center = (first + last) / 2.0;
-            positions[node] = (center, depth);
-            return center;
-        }
-
-        foreach (var root in _lastRoots)
-            LayoutNode(root, 0);
-
-        const double siblingWidth = BoxWidth + 20;
-        const double levelHeight = BoxHeight + 46;
-
-        (double X, double Y) GetParentConnectionPoint(double row, int depth)
-        {
-            if (isVertical)
-            {
-                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
-                double y = ChartPadding + depth * levelHeight + BoxHeight;
-                return (x, y);
-            }
-            else
-            {
-                double x = ChartPadding + depth * (BoxWidth + ColumnGap) + BoxWidth;
-                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
-                return (x, y);
-            }
-        }
-
-        (double X, double Y) GetChildConnectionPoint(double row, int depth)
-        {
-            if (isVertical)
-            {
-                double x = ChartPadding + row * siblingWidth + siblingWidth / 2.0;
-                double y = ChartPadding + depth * levelHeight;
-                return (x, y);
-            }
-            else
-            {
-                double x = ChartPadding + depth * (BoxWidth + ColumnGap);
-                double y = ChartPadding + row * RowHeight + RowHeight / 2.0;
-                return (x, y);
-            }
-        }
 
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -1214,26 +1385,31 @@ public partial class OrgChartView : UserControl
 
         void DrawSvgConnectors(FolderNode node)
         {
-            if (!node.IsExpanded || !positions.TryGetValue(node, out var parentPos)) return;
+            if (!node.IsExpanded || !layoutMap.TryGetValue(node, out var parentLayout)) return;
 
             foreach (var child in node.Children)
             {
-                if (!positions.TryGetValue(child, out var childPos)) continue;
+                if (!layoutMap.TryGetValue(child, out var childLayout)) continue;
 
-                var (px, py) = GetParentConnectionPoint(parentPos.Row, parentPos.Depth);
-                var (cx, cy) = GetChildConnectionPoint(childPos.Row, childPos.Depth);
+                Point startPoint = isVertical
+                    ? new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height)
+                    : new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
 
-                string strokeColor = ToHexColor(GetPalette(childPos.Depth).Border);
+                Point endPoint = isVertical
+                    ? new Point(childLayout.CenterX, childLayout.Y)
+                    : new Point(childLayout.X, childLayout.CenterY);
+
+                string strokeColor = ToHexColor(GetPalette(childLayout.Depth).Border);
 
                 if (isVertical)
                 {
-                    double midY = (py + cy) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {px.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {px.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                    double midY = (startPoint.Y + endPoint.Y) / 2.0;
+                    sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                 }
                 else
                 {
-                    double midX = (px + cx) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {px.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{py.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)} L {cx.ToString("F1", CultureInfo.InvariantCulture)},{cy.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                    double midX = (startPoint.X + endPoint.X) / 2.0;
+                    sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                 }
 
                 DrawSvgConnectors(child);
@@ -1244,9 +1420,10 @@ public partial class OrgChartView : UserControl
             DrawSvgConnectors(root);
 
         sb.AppendLine("  <!-- Nodes -->");
-        foreach (var (node, pos) in positions)
+        foreach (var info in layoutMap.Values)
         {
-            var (fill, border) = GetPalette(pos.Depth);
+            var node = info.Node;
+            var (fill, border) = GetPalette(info.Depth);
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
@@ -1254,33 +1431,21 @@ public partial class OrgChartView : UserControl
             Color borderColor = isSelected ? Color.FromRgb(0x0F, 0x76, 0x6E) : (isMatch ? Color.FromRgb(0xD9, 0x77, 0x06) : border);
             double borderWidth = (isSelected || isMatch) ? 2.5 : 1.0;
 
-            double boxX, boxY;
-            if (isVertical)
-            {
-                boxX = ChartPadding + pos.Row * siblingWidth + siblingWidth / 2.0 - BoxWidth / 2.0;
-                boxY = ChartPadding + pos.Depth * levelHeight;
-            }
-            else
-            {
-                boxX = ChartPadding + pos.Depth * (BoxWidth + ColumnGap);
-                boxY = ChartPadding + pos.Row * RowHeight + RowHeight / 2.0 - BoxHeight / 2.0;
-            }
-
             string fillHex = ToHexColor(fillColor);
             string borderHex = ToHexColor(borderColor);
             string escapedName = SecurityElement.Escape(node.Name) ?? string.Empty;
 
             sb.AppendLine("  <g>");
-            sb.AppendLine($"    <rect x=\"{boxX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{boxY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{BoxWidth}\" height=\"{BoxHeight}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth.ToString("F1", CultureInfo.InvariantCulture)}\"/>");
-            sb.AppendLine($"    <text x=\"{(boxX + BoxWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(boxY + BoxHeight / 2.0 + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
+            sb.AppendLine($"    <rect x=\"{info.X.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{info.Y.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{info.Width.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{info.Height.ToString("F1", CultureInfo.InvariantCulture)}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth.ToString("F1", CultureInfo.InvariantCulture)}\"/>");
+            sb.AppendLine($"    <text x=\"{info.CenterX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(info.CenterY + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
 
             if (node.Children.Count > 0)
             {
                 bool expanded = node.IsExpanded;
                 double badgeHeight = 16;
                 double badgeWidth = expanded ? 16 : Math.Max(22, 14 + node.Children.Count.ToString().Length * 6.5);
-                double badgeX = isVertical ? boxX + (BoxWidth - badgeWidth) / 2.0 : boxX + BoxWidth - (badgeWidth / 2.0);
-                double badgeY = isVertical ? boxY + BoxHeight - (badgeHeight / 2.0) : boxY + (BoxHeight - badgeHeight) / 2.0;
+                double badgeX = isVertical ? info.CenterX - badgeWidth / 2.0 : info.X + info.Width - (badgeWidth / 2.0);
+                double badgeY = isVertical ? info.Y + info.Height - (badgeHeight / 2.0) : info.CenterY - (badgeHeight / 2.0);
                 string badgeBg = expanded ? "#EEF2F6" : "#0F766E";
                 string badgeStroke = expanded ? "#64748B" : "#14B8A6";
                 string badgeFg = expanded ? "#334155" : "#FFFFFF";
