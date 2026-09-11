@@ -102,23 +102,25 @@
                     </Button.ContextMenu>
                 </Button>
 
-                <!-- Meaningful Dynamic Workflow Stepper -->
+                <!-- Dynamic Workflow Readiness Indicator -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Step 1 Plan -->
-                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1">
+                    <!-- Plan Readiness Pill -->
+                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1" ToolTip="{Binding DetailedStatusTooltip}">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                                <Setter Property="Opacity" Value="0.75"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsPlanReady}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <TextBlock Text="1 Plan" FontSize="11" FontWeight="SemiBold">
+                        <TextBlock Text="{Binding PlanReadinessText}" FontSize="11" FontWeight="SemiBold">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
@@ -131,22 +133,24 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </Border>
-                    <Path Data="{StaticResource ChevronRightGeometry}" Style="{StaticResource NavIcon}" Width="7" Height="7" Margin="4,0" Opacity="0.5"/>
-                    <!-- Step 2 Destination -->
-                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1">
+                    <Ellipse Width="3" Height="3" Fill="{DynamicResource BrushTextSecondary}" Opacity="0.4" Margin="5,0"/>
+                    <!-- Destination Readiness Pill -->
+                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1" ToolTip="{Binding DetailedStatusTooltip}">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                                <Setter Property="Opacity" Value="0.75"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsDestinationReady}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <TextBlock Text="2 Destination" FontSize="11" FontWeight="SemiBold">
+                        <TextBlock Text="{Binding DestinationReadinessText}" FontSize="11" FontWeight="SemiBold">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
@@ -159,27 +163,39 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </Border>
-                    <Path Data="{StaticResource ChevronRightGeometry}" Style="{StaticResource NavIcon}" Width="7" Height="7" Margin="4,0" Opacity="0.5"/>
-                    <!-- Step 3 Create -->
-                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1">
+                    <Ellipse Width="3" Height="3" Fill="{DynamicResource BrushTextSecondary}" Opacity="0.4" Margin="5,0"/>
+                    <!-- Create Readiness Pill (Actionable vs Completed vs Pending) -->
+                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1" ToolTip="{Binding CreateButtonTooltip}">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                                <Setter Property="Opacity" Value="0.6"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsCreateReady}" Value="True">
+                                    <DataTrigger Binding="{Binding IsCreateActionable}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource BrushHover}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                        <Setter Property="BorderThickness" Value="1.5"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsCreateCompleted}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
                                         <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <TextBlock Text="3 Create" FontSize="11" FontWeight="SemiBold">
+                        <TextBlock Text="{Binding CreateReadinessText}" FontSize="11" FontWeight="SemiBold">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsCreateReady}" Value="True">
+                                        <DataTrigger Binding="{Binding IsCreateActionable}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCreateCompleted}" Value="True">
                                             <Setter Property="Foreground" Value="{DynamicResource BrushAccent}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -653,7 +669,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Double-click to open in Explorer · Drag to move · Drag canvas to pan" Style="{StaticResource SubText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                <TextBlock Text="Double-click to open in Explorer · Drag to move · Drag canvas to pan" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle chart layout direction (Horizontal / Vertical)" Margin="0,0,4,0" Padding="8,4">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -716,7 +732,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Drag &amp; drop folders to reorder or re-parent. Right-click for options." Style="{StaticResource SubText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                <TextBlock Text="Drag &amp; drop folders to reorder or re-parent. Right-click for options." FontSize="12" FontWeight="Medium" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="Destination" Style="{StaticResource ToolButton}" Command="{Binding ToggleDestinationSidebarCommand}" ToolTip="Collapse or restore the destination sidebar" Visibility="{Binding ShouldShowDestinationSidebarToggle, Converter={StaticResource BoolToVis}}" Margin="0,0,4,0" Padding="6,4"/>
                                     <Button Style="{StaticResource ToolButton}" Command="{Binding ExpandAllTreeCommand}" ToolTip="Expand all folder branches in tree" Margin="0,0,2,0" Padding="8,4">
@@ -902,7 +918,7 @@
                             <TextBlock Text="Create Missing Only" FontSize="12.5" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="Create all folders in the plan under the selected destination" Padding="22,9" MinWidth="160">
+                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding CreateStructureCommand}" ToolTip="{Binding CreateButtonTooltip}" Padding="22,9" MinWidth="160">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Path Data="{StaticResource CheckGeometry}" Style="{StaticResource NavIcon}" Stroke="{DynamicResource BrushPrimaryBtnFg}" Width="13" Height="13" Margin="0,0,8,0"/>
                             <TextBlock Text="Create folders" FontSize="13.5" FontWeight="SemiBold"/>
@@ -1011,7 +1027,7 @@
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                            <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{DynamicResource BrushTextSecondary}"/>
+                                            <TextBlock Text="{Binding Category}" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,1,0,0"/>
                                         </StackPanel>
                                         <Border Grid.Column="2"
                                                 Background="{DynamicResource BrushBg}"

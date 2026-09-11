@@ -48,9 +48,16 @@ public class MainViewModel : ViewModelBase
         {
             if (SetField(ref _targetPath, value))
             {
+                HasCreatedSuccessfully = false;
                 OnPropertyChanged(nameof(TargetPathExists));
                 OnPropertyChanged(nameof(IsDestinationReady));
+                OnPropertyChanged(nameof(DestinationReadinessText));
                 OnPropertyChanged(nameof(IsCreateReady));
+                OnPropertyChanged(nameof(IsCreateCompleted));
+                OnPropertyChanged(nameof(IsCreateActionable));
+                OnPropertyChanged(nameof(IsCreatePending));
+                OnPropertyChanged(nameof(CreateReadinessText));
+                OnPropertyChanged(nameof(CreateButtonTooltip));
                 OnPropertyChanged(nameof(ConciseStatusText));
                 OnPropertyChanged(nameof(DetailedStatusTooltip));
                 CreateStructureCommand.RaiseCanExecuteChanged();
@@ -94,6 +101,44 @@ public class MainViewModel : ViewModelBase
     public bool IsDestinationReady => TargetPathExists;
     public bool IsCreateReady => CanCreateStructure();
 
+    private bool _hasCreatedSuccessfully;
+    public bool HasCreatedSuccessfully
+    {
+        get => _hasCreatedSuccessfully;
+        private set
+        {
+            if (SetField(ref _hasCreatedSuccessfully, value))
+            {
+                OnPropertyChanged(nameof(IsCreateCompleted));
+                OnPropertyChanged(nameof(IsCreateActionable));
+                OnPropertyChanged(nameof(IsCreatePending));
+                OnPropertyChanged(nameof(CreateReadinessText));
+            }
+        }
+    }
+
+    public bool IsCreateCompleted => HasCreatedSuccessfully;
+    public bool IsCreateActionable => !HasCreatedSuccessfully && CanCreateStructure();
+    public bool IsCreatePending => !HasCreatedSuccessfully && !CanCreateStructure();
+
+    public string PlanReadinessText => HasStructureNodes ? $"✓ Plan ({TotalFolderCount})" : "Plan needed";
+    public string DestinationReadinessText => TargetPathExists ? "✓ Destination" : "Destination needed";
+    public string CreateReadinessText => HasCreatedSuccessfully
+        ? "✓ Created"
+        : (CanCreateStructure() ? "▶ Ready to create" : "Create");
+
+    public string CreateButtonTooltip
+    {
+        get
+        {
+            if (!TargetPathExists)
+                return "Select a valid destination folder on disk first.";
+            if (RootFolders.Count == 0)
+                return "Add at least one folder to the plan before creating.";
+            return $"Create all {TotalFolderCount} planned folders under \"{TargetPath}\".";
+        }
+    }
+
     private bool _isQuickAddExpanded;
     public bool IsQuickAddExpanded
     {
@@ -119,15 +164,29 @@ public class MainViewModel : ViewModelBase
             if (TotalFolderCount > 0)
             {
                 if (_lastImportIgnoredCount > 0)
-                    return $"{TotalFolderCount} folders · {_lastImportIgnoredCount} ignored";
-                return $"{TotalFolderCount} folders ready";
+                    return $"{TotalFolderCount} planned · {_lastImportIgnoredCount} ignored";
+                return $"{TotalFolderCount} planned folder{(TotalFolderCount == 1 ? "" : "s")}";
             }
 
-            return "Ready";
+            return "No folders planned";
         }
     }
 
-    public string DetailedStatusTooltip => string.IsNullOrWhiteSpace(StatusMessage) ? ConciseStatusText : StatusMessage;
+    public string DetailedStatusTooltip
+    {
+        get
+        {
+            if (IsLiveSyncMode && TargetPathExists)
+                return $"Live sync is active on \"{TargetPath}\": edits to the plan immediately create, rename, or delete folders on disk.";
+            if (IsDiffActive && !string.IsNullOrEmpty(DiffSummaryText))
+                return $"Disk comparison against \"{TargetPath}\": {DiffSummaryText}.";
+            if (!string.IsNullOrWhiteSpace(StatusMessage))
+                return StatusMessage;
+            if (CanCreateStructure())
+                return $"Plan contains {TotalFolderCount} folder(s) ready to create in \"{TargetPath}\".";
+            return "Plan folders in the central canvas and select a target destination on the left.";
+        }
+    }
 
     private string _quickAddNames = string.Empty;
     /// <summary>Comma-separated names typed into the quick-add box, e.g. "src, docs, tests".</summary>
@@ -319,10 +378,17 @@ public class MainViewModel : ViewModelBase
 
     private void RaiseStructureChanged()
     {
+        HasCreatedSuccessfully = false;
         OnPropertyChanged(nameof(TotalFolderCount));
         OnPropertyChanged(nameof(HasStructureNodes));
         OnPropertyChanged(nameof(IsPlanReady));
+        OnPropertyChanged(nameof(PlanReadinessText));
         OnPropertyChanged(nameof(IsCreateReady));
+        OnPropertyChanged(nameof(IsCreateCompleted));
+        OnPropertyChanged(nameof(IsCreateActionable));
+        OnPropertyChanged(nameof(IsCreatePending));
+        OnPropertyChanged(nameof(CreateReadinessText));
+        OnPropertyChanged(nameof(CreateButtonTooltip));
         OnPropertyChanged(nameof(ConciseStatusText));
         OnPropertyChanged(nameof(DetailedStatusTooltip));
         StructureChanged?.Invoke();
@@ -1516,6 +1582,7 @@ public class MainViewModel : ViewModelBase
 
         if (result.Success)
         {
+            HasCreatedSuccessfully = true;
             StatusMessage = $"Done: {result.CreatedCount} folder(s) created" +
                              (result.AlreadyExistedCount > 0 ? $", {result.AlreadyExistedCount} already existed" : "") +
                              $" under \"{targetSnapshot}\".";

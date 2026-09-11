@@ -332,10 +332,11 @@ public partial class OrgChartView : UserControl
                 ChartScrollViewer.ViewportWidth <= 0 || ChartScrollViewer.ViewportHeight <= 0)
                 return;
 
-            double padding = 32;
+            double padding = 48;
             var widthScale = (ChartScrollViewer.ViewportWidth - padding) / RootCanvas.Width;
             var heightScale = (ChartScrollViewer.ViewportHeight - padding) / RootCanvas.Height;
-            double fitZoom = Math.Min(widthScale, heightScale);
+            // Frame visible hierarchy: if tree is smaller than viewport, keep 100% scale (never artificially enlarge beyond 1.0)
+            double fitZoom = Math.Clamp(Math.Min(widthScale, heightScale), MinZoom, 1.0);
 
             SetZoom(fitZoom);
 
@@ -368,9 +369,9 @@ public partial class OrgChartView : UserControl
             if (RootCanvas.Width <= 0 || ChartScrollViewer.ViewportWidth <= 0)
                 return;
 
-            double padding = 32;
+            double padding = 48;
             var widthScale = (ChartScrollViewer.ViewportWidth - padding) / RootCanvas.Width;
-            double fitZoom = Math.Clamp(widthScale, MinZoom, MaxZoom);
+            double fitZoom = Math.Clamp(widthScale, MinZoom, 1.0);
 
             SetZoom(fitZoom);
 
@@ -687,6 +688,9 @@ public partial class OrgChartView : UserControl
 
     private void RenderInternal()
     {
+        double prevHOffset = ChartScrollViewer.HorizontalOffset;
+        double prevVOffset = ChartScrollViewer.VerticalOffset;
+
         RootCanvas.Children.Clear();
         _boxMap.Clear();
 
@@ -820,20 +824,42 @@ public partial class OrgChartView : UserControl
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            boxStack.Children.Add(new TextBlock
+            var namePanel = new StackPanel
             {
-                Text = node.Name,
-                FontSize = 12.0,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = textForeground,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                TextAlignment = TextAlignment.Center,
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(
                     8,
                     0,
                     (node.Children.Count > 0 && !isVertical ? 16 : 8),
                     (node.Children.Count > 0 && isVertical ? 8 : 0))
+            };
+
+            if (isSelected)
+            {
+                namePanel.Children.Add(new TextBlock
+                {
+                    Text = "● ",
+                    FontSize = 9.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = isDark ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 2, 0)
+                });
+            }
+
+            namePanel.Children.Add(new TextBlock
+            {
+                Text = node.Name,
+                FontSize = 12.0,
+                FontWeight = isSelected ? FontWeights.Bold : FontWeights.SemiBold,
+                Foreground = textForeground,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Center
             });
+
+            boxStack.Children.Add(namePanel);
 
             if (node.HasDiffBadge)
             {
@@ -854,11 +880,74 @@ public partial class OrgChartView : UserControl
                 Height = info.Height,
                 Background = boxBackground,
                 BorderBrush = boxBorderBrush,
-                BorderThickness = new Thickness((isSelected || isMatch || node.HasDiffBadge) ? 2.5 : 1.2),
+                BorderThickness = new Thickness(isSelected ? 2.8 : ((isMatch || node.HasDiffBadge) ? 2.0 : 1.2)),
                 CornerRadius = new CornerRadius(6),
                 Cursor = Cursors.Hand,
                 ToolTip = node.Name,
+                Focusable = true,
+                FocusVisualStyle = null,
                 Child = boxStack
+            };
+
+            if (isSelected)
+            {
+                box.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88),
+                    BlurRadius = 12,
+                    ShadowDepth = 0,
+                    Opacity = 0.85
+                };
+            }
+
+            Brush originalBorder = boxBorderBrush;
+            box.MouseEnter += (s, e) =>
+            {
+                if (!ReferenceEquals(node, _lastSelected))
+                {
+                    box.BorderBrush = isDark ? new SolidColorBrush(Color.FromArgb(0xDD, 0x5E, 0xEA, 0xD4)) : new SolidColorBrush(Color.FromArgb(0xDD, 0x14, 0xB8, 0xA6));
+                }
+            };
+            box.MouseLeave += (s, e) =>
+            {
+                if (!ReferenceEquals(node, _lastSelected))
+                {
+                    box.BorderBrush = originalBorder;
+                }
+            };
+            box.GotFocus += (s, e) =>
+            {
+                if (!ReferenceEquals(node, _lastSelected))
+                {
+                    box.BorderThickness = new Thickness(2.2);
+                    box.BorderBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x5E, 0xEA, 0xD4)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+                }
+            };
+            box.LostFocus += (s, e) =>
+            {
+                if (!ReferenceEquals(node, _lastSelected))
+                {
+                    box.BorderThickness = new Thickness((isMatch || node.HasDiffBadge) ? 2.0 : 1.2);
+                    box.BorderBrush = originalBorder;
+                }
+            };
+            box.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter || e.Key == Key.Space)
+                {
+                    NodeClicked?.Invoke(node);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.F2)
+                {
+                    BeginRename(node, box);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Delete)
+                {
+                    DeleteRequested?.Invoke(node);
+                    e.Handled = true;
+                }
             };
 
             Canvas.SetLeft(box, info.X);
@@ -1070,16 +1159,16 @@ public partial class OrgChartView : UserControl
             if (node.Children.Count > 0)
             {
                 bool expanded = node.IsExpanded;
-                double badgeHeight = 18;
-                double badgeWidth = expanded ? 18 : Math.Max(26, 14 + node.Children.Count.ToString().Length * 7);
+                double badgeHeight = 22;
+                double badgeWidth = expanded ? 22 : Math.Max(30, 16 + node.Children.Count.ToString().Length * 8);
 
                 var badgeText = new TextBlock
                 {
                     Text = expanded ? "−" : $"+{node.Children.Count}",
-                    FontSize = expanded ? 11.5 : 9.5,
+                    FontSize = expanded ? 12.0 : 10.0,
                     FontWeight = FontWeights.Bold,
                     Foreground = expanded
-                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)) : new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)))
+                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0xCF, 0xFA, 0xFE)) : new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A)))
                         : Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1095,9 +1184,9 @@ public partial class OrgChartView : UserControl
                         ? (isDark ? new SolidColorBrush(Color.FromRgb(0x13, 0x2B, 0x39)) : new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF6)))
                         : (isDark ? new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88))),
                     BorderBrush = expanded
-                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)) : new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)))
+                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8)) : new SolidColorBrush(Color.FromRgb(0x02, 0x84, 0xC7)))
                         : (isDark ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : new SolidColorBrush(Color.FromRgb(0x14, 0xB8, 0xA6))),
-                    BorderThickness = new Thickness(1.2),
+                    BorderThickness = new Thickness(1.4),
                     Cursor = Cursors.Hand,
                     ToolTip = expanded
                         ? $"Click to collapse ({node.Children.Count} subfolders)"
@@ -1139,6 +1228,12 @@ public partial class OrgChartView : UserControl
             {
                 BeginRename(node, box);
             }
+        }
+
+        if (prevHOffset > 0 || prevVOffset > 0)
+        {
+            ChartScrollViewer.ScrollToHorizontalOffset(prevHOffset);
+            ChartScrollViewer.ScrollToVerticalOffset(prevVOffset);
         }
 
         UpdateContainerAlignment();
@@ -1489,17 +1584,17 @@ public partial class OrgChartView : UserControl
             if (node.Children.Count > 0)
             {
                 bool expanded = node.IsExpanded;
-                double badgeHeight = 16;
-                double badgeWidth = expanded ? 16 : Math.Max(22, 14 + node.Children.Count.ToString().Length * 6.5);
+                double badgeHeight = 20;
+                double badgeWidth = expanded ? 20 : Math.Max(28, 16 + node.Children.Count.ToString().Length * 7.5);
                 double badgeX = isVertical ? info.CenterX - badgeWidth / 2.0 : info.X + info.Width - (badgeWidth / 2.0);
                 double badgeY = isVertical ? info.Y + info.Height - (badgeHeight / 2.0) : info.CenterY - (badgeHeight / 2.0);
                 string badgeBg = expanded ? (isDark ? "#132B39" : "#EEF2F6") : (isDark ? "#0F766E" : "#0D9488");
-                string badgeStroke = expanded ? (isDark ? "#334155" : "#64748B") : (isDark ? "#2DD4BF" : "#14B8A6");
-                string badgeFg = expanded ? (isDark ? "#94A3B8" : "#334155") : "#FFFFFF";
+                string badgeStroke = expanded ? (isDark ? "#38BDF8" : "#0284C7") : (isDark ? "#2DD4BF" : "#14B8A6");
+                string badgeFg = expanded ? (isDark ? "#CFFAFE" : "#0F172A") : "#FFFFFF";
                 string badgeLabel = expanded ? "−" : $"+{node.Children.Count}";
 
-                sb.AppendLine($"    <rect x=\"{badgeX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{badgeY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{badgeWidth.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{badgeHeight}\" rx=\"{badgeHeight / 2.0}\" ry=\"{badgeHeight / 2.0}\" fill=\"{badgeBg}\" stroke=\"{badgeStroke}\" stroke-width=\"1\"/>");
-                sb.AppendLine($"    <text x=\"{(badgeX + badgeWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(badgeY + badgeHeight / 2.0 + 3.5).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"{badgeFg}\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"9\" font-weight=\"bold\" text-anchor=\"middle\">{badgeLabel}</text>");
+                sb.AppendLine($"    <rect x=\"{badgeX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{badgeY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{badgeWidth.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{badgeHeight}\" rx=\"{badgeHeight / 2.0}\" ry=\"{badgeHeight / 2.0}\" fill=\"{badgeBg}\" stroke=\"{badgeStroke}\" stroke-width=\"1.4\"/>");
+                sb.AppendLine($"    <text x=\"{(badgeX + badgeWidth / 2.0).ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(badgeY + badgeHeight / 2.0 + 3.5).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"{badgeFg}\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"10\" font-weight=\"bold\" text-anchor=\"middle\">{badgeLabel}</text>");
             }
 
             sb.AppendLine("  </g>");

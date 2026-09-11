@@ -444,7 +444,7 @@
             </Style>
 
             <ControlTemplate x:Key="SubmenuItemTemplate" TargetType="MenuItem">
-                <Border x:Name="Border" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                <Border x:Name="Border" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="5" Padding="{TemplateBinding Padding}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="22"/>
@@ -483,6 +483,10 @@
                     <Trigger Property="IsHighlighted" Value="True">
                         <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
                     </Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
+                        <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                    </Trigger>
                     <Trigger Property="IsEnabled" Value="False">
                         <Setter Property="Opacity" Value="0.45"/>
                     </Trigger>
@@ -490,7 +494,7 @@
             </ControlTemplate>
 
             <ControlTemplate x:Key="SubmenuHeaderTemplate" TargetType="MenuItem">
-                <Border x:Name="Border" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                <Border x:Name="Border" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="5" Padding="{TemplateBinding Padding}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -534,6 +538,10 @@
                     <Trigger Property="IsHighlighted" Value="True">
                         <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
                     </Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
+                        <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                    </Trigger>
                     <Trigger Property="IsSubmenuOpen" Value="True">
                         <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
                     </Trigger>
@@ -559,10 +567,19 @@
                 </Style.Triggers>
             </Style>
 
-            <Style TargetType="Separator">
+            <Style TargetType="{x:Type Separator}">
                 <Setter Property="Background" Value="{DynamicResource BrushBorder}"/>
-                <Setter Property="Margin" Value="4,4"/>
+                <Setter Property="Margin" Value="6,4"/>
                 <Setter Property="Height" Value="1"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Separator}">
+                            <Rectangle Height="1" Fill="{TemplateBinding Background}" SnapsToDevicePixels="True" Opacity="0.65"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <Style TargetType="CheckBox">
