@@ -257,6 +257,8 @@ public class MainViewModel : ViewModelBase
         StructureChanged?.Invoke();
         ExpandAllOrgChartCommand?.RaiseCanExecuteChanged();
         CollapseAllOrgChartCommand?.RaiseCanExecuteChanged();
+        ExpandAllTreeCommand?.RaiseCanExecuteChanged();
+        CollapseAllTreeCommand?.RaiseCanExecuteChanged();
     }
 
     public int TotalFolderCount => RootFolders.Sum(r => r.CountFoldersOnly());
@@ -424,6 +426,8 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
     public RelayCommand ExpandAllOrgChartCommand { get; }
     public RelayCommand CollapseAllOrgChartCommand { get; }
+    public RelayCommand ExpandAllTreeCommand { get; }
+    public RelayCommand CollapseAllTreeCommand { get; }
     public RelayCommand SetThemeCommand { get; }
     public RelayCommand ToggleCommandPaletteCommand { get; }
     public RelayCommand OpenCommandPaletteCommand { get; }
@@ -471,6 +475,8 @@ public class MainViewModel : ViewModelBase
         ToggleOrgChartLayoutCommand = new RelayCommand(_ => IsVerticalOrgChart = !IsVerticalOrgChart);
         ExpandAllOrgChartCommand = new RelayCommand(_ => ExpandAllOrgChart(), _ => RootFolders.Count > 0);
         CollapseAllOrgChartCommand = new RelayCommand(_ => CollapseAllOrgChart(), _ => RootFolders.Count > 0);
+        ExpandAllTreeCommand = new RelayCommand(_ => ExpandAllTree(), _ => RootFolders.Count > 0);
+        CollapseAllTreeCommand = new RelayCommand(_ => CollapseAllTree(), _ => RootFolders.Count > 0);
         ClearSearchCommand = new RelayCommand(_ => { SearchQuery = string.Empty; IsSearchDropdownOpen = false; });
         NavigateNextMatchCommand = new RelayCommand(_ => NavigateSearchMatch(1), _ => SearchMatchCount > 0);
         NavigatePrevMatchCommand = new RelayCommand(_ => NavigateSearchMatch(-1), _ => SearchMatchCount > 0);
@@ -1360,6 +1366,42 @@ public class MainViewModel : ViewModelBase
         RaiseStructureChanged();
     }
 
+    public void ExpandAllTree()
+    {
+        void SetExpandedRecursive(FolderNode node, bool expanded)
+        {
+            node.IsExpanded = expanded;
+            foreach (var child in node.Children)
+                SetExpandedRecursive(child, expanded);
+        }
+
+        foreach (var root in RootFolders)
+            SetExpandedRecursive(root, true);
+
+        RaiseStructureChanged();
+    }
+
+    public void CollapseAllTree()
+    {
+        void CollapseDescendants(FolderNode node)
+        {
+            node.IsExpanded = false;
+            foreach (var child in node.Children)
+                CollapseDescendants(child);
+        }
+
+        bool keepRootExpanded = RootFolders.Count == 1 && RootFolders[0].Children.Any(c => c.IsExpanded);
+
+        foreach (var root in RootFolders)
+        {
+            root.IsExpanded = keepRootExpanded;
+            foreach (var child in root.Children)
+                CollapseDescendants(child);
+        }
+
+        RaiseStructureChanged();
+    }
+
     // ---- Structure creation on disk ----
 
     private bool CanCreateStructure() => TargetPathExists && RootFolders.Count > 0;
@@ -1437,6 +1479,8 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "➡️", ToggleOrgChartLayoutCommand));
         AllCommands.Add(new CommandItem("Expand All Org Chart Folders", "Org Chart", "⊞", ExpandAllOrgChartCommand));
         AllCommands.Add(new CommandItem("Collapse All Org Chart Folders", "Org Chart", "⊟", CollapseAllOrgChartCommand));
+        AllCommands.Add(new CommandItem("Expand All Tree View Folders", "Tree View", "⊞", ExpandAllTreeCommand));
+        AllCommands.Add(new CommandItem("Collapse All Tree View Folders", "Tree View", "⊟", CollapseAllTreeCommand));
         AllCommands.Add(new CommandItem("Toggle Destination Sidebar", "Workspace", "📐", ToggleDestinationSidebarCommand));
 
         // Themes

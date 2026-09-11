@@ -985,9 +985,9 @@ public partial class OrgChartView : UserControl
 
             var deleteItem = new MenuItem
             {
-                Header = "🗑️ Delete",
-                Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71))
+                Header = "🗑️ Delete"
             };
+            deleteItem.SetResourceReference(MenuItem.ForegroundProperty, "BrushDanger");
             deleteItem.Click += (_, _) =>
             {
                 NodeClicked?.Invoke(node);

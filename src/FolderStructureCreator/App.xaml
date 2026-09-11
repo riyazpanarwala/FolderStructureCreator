@@ -258,12 +258,23 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="MenuItem">
                             <Border x:Name="Border" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                <ContentPresenter ContentSource="Header"
-                                                  RecognizesAccessKey="True"
-                                                  VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter x:Name="IconPresenter" ContentSource="Icon"
+                                                      Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <ContentPresenter Grid.Column="1" ContentSource="Header"
+                                                      RecognizesAccessKey="True"
+                                                      VerticalAlignment="Center"
+                                                      TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                </Grid>
                             </Border>
                             <ControlTemplate.Triggers>
+                                <Trigger Property="Icon" Value="{x:Null}">
+                                    <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed"/>
+                                </Trigger>
                                 <Trigger Property="IsHighlighted" Value="True">
                                     <Setter TargetName="Border" Property="Background" Value="{DynamicResource BrushHover}"/>
                                 </Trigger>

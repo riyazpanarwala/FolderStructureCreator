@@ -302,6 +302,20 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <Border Background="{DynamicResource BrushAccentSoft}" CornerRadius="5" Padding="8,5" Margin="0,8,0,0" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Drag &amp; drop items to reorder or re-parent. Right-click for options." Style="{StaticResource SubText}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="Toggle destination" Style="{StaticResource ToolButton}" Command="{Binding ToggleDestinationSidebarCommand}" ToolTip="Collapse or restore the destination sidebar" Visibility="{Binding ShouldShowDestinationSidebarToggle, Converter={StaticResource BoolToVis}}" Margin="0,0,4,0"/>
+                                    <Button Content="⊞ Expand all" Style="{StaticResource ToolButton}" Command="{Binding ExpandAllTreeCommand}" ToolTip="Expand all folder branches in tree" Margin="0,0,2,0"/>
+                                    <Button Content="⊟ Collapse all" Style="{StaticResource ToolButton}" Command="{Binding CollapseAllTreeCommand}" ToolTip="Collapse all subfolder branches in tree" Margin="0,0,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
                     <Grid>
@@ -316,14 +330,14 @@
                                     <Setter Property="ContextMenu">
                                         <Setter.Value>
                                             <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
-                                                <MenuItem Header="Open in Explorer" Command="{Binding OpenInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                <MenuItem Header="📂 Open in Explorer" Command="{Binding OpenInExplorerCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                 <Separator/>
-                                                <MenuItem Header="Add child" Command="{Binding AddChildFolderCommand}"/>
-                                                <MenuItem Header="Add sibling" Command="{Binding AddSiblingFolderCommand}"/>
-                                                <MenuItem Header="Move to Root" Command="{Binding MoveToRootCommand}"/>
+                                                <MenuItem Header="➕ Add child" Command="{Binding AddChildFolderCommand}"/>
+                                                <MenuItem Header="📄 Add sibling" Command="{Binding AddSiblingFolderCommand}"/>
+                                                <MenuItem Header="⬆️ Move to Root" Command="{Binding MoveToRootCommand}"/>
                                                 <Separator/>
-                                                <MenuItem Header="Rename" Command="{Binding StartRenameCommand}"/>
-                                                <MenuItem Header="Delete" Command="{Binding DeleteNodeCommand}" Foreground="{DynamicResource BrushDanger}"/>
+                                                <MenuItem Header="✏️ Rename" Command="{Binding StartRenameCommand}"/>
+                                                <MenuItem Header="🗑️ Delete" Command="{Binding DeleteNodeCommand}" Foreground="{DynamicResource BrushDanger}"/>
                                             </ContextMenu>
                                         </Setter.Value>
                                     </Setter>
