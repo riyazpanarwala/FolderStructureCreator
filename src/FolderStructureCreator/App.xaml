@@ -93,6 +93,7 @@
             </Style>
 
             <!-- Toolbar Button Style -->
+            <!-- Toolbar Button Style -->
             <Style x:Key="ToolButton" TargetType="Button">
                 <Setter Property="Padding" Value="9,5"/>
                 <Setter Property="Margin" Value="0,0,6,0"/>
@@ -117,13 +118,6 @@
                                                    Margin="{TemplateBinding Padding}"/>
                             </Border>
                             <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource BrushHover}"/>
-                                    <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource BrushSelected}"/>
-                                </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.45"/>
                                 </Trigger>
@@ -131,6 +125,15 @@
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource BrushHover}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource BrushSelected}"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <!-- Compact Icon Button Style (square/circular actions) -->
@@ -165,6 +168,11 @@
                     <Trigger Property="IsMouseOver" Value="True">
                         <Setter Property="Background" Value="{DynamicResource BrushAccentHover}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource BrushAccentHover}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource BrushPrimaryBtnFg}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource BrushAccent}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -179,6 +187,34 @@
                         <Setter Property="BorderBrush" Value="{DynamicResource BrushDanger}"/>
                     </Trigger>
                 </Style.Triggers>
+            </Style>
+
+            <!-- Modern Themed ToolTip Style -->
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="{DynamicResource BrushPanel}"/>
+                <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="8,5"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="HasDropShadow" Value="True"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToolTip">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="5"
+                                    Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25" Color="#000000"/>
+                                </Border.Effect>
+                                <ContentPresenter/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- Typography Styles -->
