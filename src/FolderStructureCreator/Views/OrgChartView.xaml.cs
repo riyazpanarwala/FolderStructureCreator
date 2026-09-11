@@ -81,23 +81,69 @@ public partial class OrgChartView : UserControl
 
     private const double BoxWidth = 172;
     private const double BoxHeight = 34;
-    private const double PeachBoxHeight = 26;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns (Horizontal mode)
     private const double MinVerticalSpacing = 12; // vertical spacing between adjacent boxes
     private const double MinHorizontalSpacing = 16;
     private const double ChartPadding = 24;
 
-    // Depth-based palette, cycling if the tree goes deeper than the list - loosely matches the
-    // reference org-chart style (root=blue, then salmon, gray, amber, repeating).
-    private static readonly (Color Fill, Color Border)[] Palette =
+    // Depth-based palettes harmonious with Dark, Light, and High Contrast themes
+    private static readonly (Color Fill, Color Border, Color Text)[] DarkPalette =
     {
-        (Color.FromRgb(0xAF, 0xC2, 0xE8), Color.FromRgb(0x6C, 0x86, 0xC2)), // depth 0 - blue
-        (Color.FromRgb(0xF3, 0xB3, 0x9B), Color.FromRgb(0xD9, 0x7A, 0x5A)), // depth 1 - salmon
-        (Color.FromRgb(0xD3, 0xD6, 0xDC), Color.FromRgb(0x9A, 0x9F, 0xA8)), // depth 2 - gray
-        (Color.FromRgb(0xF7, 0xCE, 0x8A), Color.FromRgb(0xE0, 0xA5, 0x3A)), // depth 3 - amber
+        (Color.FromRgb(0x13, 0x38, 0x48), Color.FromRgb(0x2D, 0xD4, 0xBF), Color.FromRgb(0xF8, 0xFA, 0xFC)), // depth 0 - teal dark slate
+        (Color.FromRgb(0x1E, 0x2D, 0x4A), Color.FromRgb(0x60, 0xA5, 0xFA), Color.FromRgb(0xF8, 0xFA, 0xFC)), // depth 1 - soft navy slate
+        (Color.FromRgb(0x15, 0x3E, 0x35), Color.FromRgb(0x34, 0xD3, 0x99), Color.FromRgb(0xF8, 0xFA, 0xFC)), // depth 2 - emerald slate
+        (Color.FromRgb(0x38, 0x2E, 0x1E), Color.FromRgb(0xFB, 0xBF, 0x24), Color.FromRgb(0xF8, 0xFA, 0xFC)), // depth 3 - amber slate
+        (Color.FromRgb(0x2D, 0x23, 0x45), Color.FromRgb(0xA7, 0x8B, 0xFA), Color.FromRgb(0xF8, 0xFA, 0xFC)), // depth 4 - violet slate
     };
 
-    private static readonly SolidColorBrush SelectedBrush = new(Color.FromRgb(0x0F, 0x76, 0x6E));
+    private static readonly (Color Fill, Color Border, Color Text)[] LightPalette =
+    {
+        (Color.FromRgb(0xCC, 0xFB, 0xF1), Color.FromRgb(0x0D, 0x94, 0x88), Color.FromRgb(0x0F, 0x17, 0x2A)), // depth 0 - teal
+        (Color.FromRgb(0xDB, 0xEA, 0xFE), Color.FromRgb(0x25, 0x63, 0xEB), Color.FromRgb(0x0F, 0x17, 0x2A)), // depth 1 - blue
+        (Color.FromRgb(0xD1, 0xFA, 0xE5), Color.FromRgb(0x05, 0x96, 0x69), Color.FromRgb(0x0F, 0x17, 0x2A)), // depth 2 - emerald
+        (Color.FromRgb(0xFE, 0xF3, 0xC7), Color.FromRgb(0xD9, 0x77, 0x06), Color.FromRgb(0x0F, 0x17, 0x2A)), // depth 3 - amber
+        (Color.FromRgb(0xED, 0xE9, 0xFE), Color.FromRgb(0x7C, 0x3A, 0xED), Color.FromRgb(0x0F, 0x17, 0x2A)), // depth 4 - violet
+    };
+
+    private static readonly (Color Fill, Color Border, Color Text)[] HighContrastPalette =
+    {
+        (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0x00, 0xFF, 0xFF), Color.FromRgb(0xFF, 0xFF, 0xFF)), // depth 0 - cyan
+        (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0xFF, 0xFF, 0x00), Color.FromRgb(0xFF, 0xFF, 0xFF)), // depth 1 - yellow
+        (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0x00, 0xFF, 0x00), Color.FromRgb(0xFF, 0xFF, 0xFF)), // depth 2 - green
+        (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0xFF, 0x80, 0x00), Color.FromRgb(0xFF, 0xFF, 0xFF)), // depth 3 - orange
+        (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0xFF, 0x00, 0xFF), Color.FromRgb(0xFF, 0xFF, 0xFF)), // depth 4 - magenta
+    };
+
+    private static bool IsDarkTheme()
+    {
+        var effective = FolderStructureCreator.Services.ThemeService.GetEffectiveTheme(FolderStructureCreator.Services.ThemeService.CurrentTheme);
+        return effective == FolderStructureCreator.Services.AppTheme.Dark;
+    }
+
+    private static bool IsHighContrastTheme()
+    {
+        var effective = FolderStructureCreator.Services.ThemeService.GetEffectiveTheme(FolderStructureCreator.Services.ThemeService.CurrentTheme);
+        return effective == FolderStructureCreator.Services.AppTheme.HighContrast;
+    }
+
+    private static (Color Fill, Color Border, Color Text) GetPalette(int depth)
+    {
+        if (IsHighContrastTheme())
+            return HighContrastPalette[depth % HighContrastPalette.Length];
+        return IsDarkTheme()
+            ? DarkPalette[depth % DarkPalette.Length]
+            : LightPalette[depth % LightPalette.Length];
+    }
+
+    private static Brush GetSelectedBorderBrush()
+    {
+        if (IsHighContrastTheme())
+            return new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0x00));
+        return IsDarkTheme()
+            ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF))
+            : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+    }
+
     private static readonly SolidColorBrush DragHoverBrush = new(Color.FromRgb(0x02, 0x84, 0xC7)); // Sky blue highlight for drag target
     private static readonly SolidColorBrush SearchMatchBorderBrush = new(Color.FromRgb(0xD9, 0x77, 0x06)); // Gold/Amber border for search match
     private static readonly SolidColorBrush SearchMatchBackgroundBrush = new(Color.FromRgb(0xFE, 0xF0, 0x8A)); // Bright yellow fill for search match
@@ -396,61 +442,10 @@ public partial class OrgChartView : UserControl
         public double CenterY => Y + Height / 2.0;
     }
 
-    private static bool IsPeachNode(int depth) => (depth % Palette.Length) == 1;
-
-    private static double MeasureTextWidth(string text, double fontSize, FontWeight fontWeight)
-    {
-        if (string.IsNullOrEmpty(text)) return 0;
-        var typeface = new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, fontWeight, FontStretches.Normal);
-        var formattedText = new FormattedText(
-            text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            fontSize,
-            Brushes.Black,
-            1.0);
-        return formattedText.WidthIncludingTrailingWhitespace;
-    }
-
     private static (double Width, double Height) GetNodeDimensions(FolderNode node, int depth)
     {
-        bool isPeach = IsPeachNode(depth);
-
-        double height;
-        if (isPeach)
-        {
-            // Peach/red boxes: reduced top & bottom padding so they are more compact vertically
-            height = node.HasDiffBadge ? 34.0 : PeachBoxHeight;
-        }
-        else
-        {
-            height = node.HasDiffBadge ? 36.0 : BoxHeight;
-        }
-
-        double width;
-        if (isPeach)
-        {
-            if (node.Children.Count > 0)
-            {
-                // Has child folders/nodes: keep enough width to clearly represent parent-child hierarchy and connector lines
-                width = BoxWidth;
-            }
-            else
-            {
-                // No child folders/nodes: reduce width dynamically based on content with reasonable minimum padding
-                double textWidth = MeasureTextWidth(node.Name, 11.5, FontWeights.SemiBold);
-                const double horizontalPadding = 24.0; // 12px padding on each side
-                const double minWidth = 70.0;
-                width = Math.Clamp(Math.Ceiling(textWidth + horizontalPadding), minWidth, BoxWidth);
-            }
-        }
-        else
-        {
-            width = BoxWidth;
-        }
-
-        return (width, height);
+        double height = node.HasDiffBadge ? 36.0 : BoxHeight;
+        return (BoxWidth, height);
     }
 
     private static void ShiftSubtree(FolderNode node, double deltaX, double deltaY, Dictionary<FolderNode, NodeLayoutInfo> map)
@@ -763,42 +758,60 @@ public partial class OrgChartView : UserControl
             DrawConnectors(root);
 
         // ---- Node boxes. ----
+        bool isDark = IsDarkTheme();
+
         foreach (var info in layoutMap.Values)
         {
             var node = info.Node;
-            var (fill, border) = GetPalette(info.Depth);
+            var (fill, border, textCol) = GetPalette(info.Depth);
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
             Brush boxBackground = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
-            Brush boxBorderBrush = isSelected ? SelectedBrush : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
-            Brush textForeground = new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A)); // Dark Slate for high contrast on light pastel boxes
-            Brush badgeForeground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69));
+            Brush boxBorderBrush = isSelected ? GetSelectedBorderBrush() : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
+            Brush textForeground = new SolidColorBrush(textCol);
+            Brush badgeForeground = new SolidColorBrush(isDark ? Color.FromRgb(0x94, 0xA3, 0xB8) : Color.FromRgb(0x47, 0x55, 0x69));
 
             if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
-                boxBackground = new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));  // Soft Emerald Light
-                textForeground = new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46)); // Dark Emerald Text
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0x04, 0x78, 0x57));
+                boxBackground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B))
+                    : new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
+                textForeground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0xEC, 0xFD, 0xF5))
+                    : new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46));
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
             }
             else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)); // Slate Neutral
-                boxBackground = new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));  // Light Slate Neutral
-                textForeground = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)); // Dark Slate Text
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69));
+                boxBackground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B))
+                    : new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
+                textForeground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9))
+                    : new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
             }
             else if (node.DiffStatus == NodeDiffStatus.ExtraOnDisk)
             {
                 boxBorderBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
-                boxBackground = new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));  // Soft Amber Light
-                textForeground = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F)); // Dark Amber Text
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0xB4, 0x53, 0x09));
+                boxBackground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0x45, 0x1A, 0x03))
+                    : new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));
+                textForeground = isDark
+                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7))
+                    : new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F));
+                badgeForeground = new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24));
             }
             else if (isMatch)
             {
-                textForeground = new SolidColorBrush(Color.FromRgb(0x85, 0x4D, 0x0E)); // Dark Gold Text for Search Match
+                textForeground = new SolidColorBrush(isDark ? Color.FromRgb(0xFE, 0xF0, 0x8A) : Color.FromRgb(0x85, 0x4D, 0x0E));
+                if (isDark)
+                {
+                    boxBackground = new SolidColorBrush(Color.FromRgb(0x42, 0x20, 0x06));
+                }
             }
 
             var boxStack = new StackPanel
@@ -810,16 +823,16 @@ public partial class OrgChartView : UserControl
             boxStack.Children.Add(new TextBlock
             {
                 Text = node.Name,
-                FontSize = 11.5,
+                FontSize = 12.0,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = textForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(
-                    6,
+                    8,
                     0,
-                    (node.Children.Count > 0 && !isVertical ? 15 : 6),
-                    (node.Children.Count > 0 && isVertical ? 6 : 0))
+                    (node.Children.Count > 0 && !isVertical ? 16 : 8),
+                    (node.Children.Count > 0 && isVertical ? 8 : 0))
             });
 
             if (node.HasDiffBadge)
@@ -841,7 +854,7 @@ public partial class OrgChartView : UserControl
                 Height = info.Height,
                 Background = boxBackground,
                 BorderBrush = boxBorderBrush,
-                BorderThickness = new Thickness((isSelected || isMatch || node.HasDiffBadge) ? 2.5 : 1),
+                BorderThickness = new Thickness((isSelected || isMatch || node.HasDiffBadge) ? 2.5 : 1.2),
                 CornerRadius = new CornerRadius(6),
                 Cursor = Cursors.Hand,
                 ToolTip = node.Name,
@@ -1065,7 +1078,9 @@ public partial class OrgChartView : UserControl
                     Text = expanded ? "−" : $"+{node.Children.Count}",
                     FontSize = expanded ? 11.5 : 9.5,
                     FontWeight = FontWeights.Bold,
-                    Foreground = expanded ? new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)) : Brushes.White,
+                    Foreground = expanded
+                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)) : new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)))
+                        : Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, expanded ? -1.5 : 0, 0, 0)
@@ -1077,11 +1092,11 @@ public partial class OrgChartView : UserControl
                     Height = badgeHeight,
                     CornerRadius = new CornerRadius(badgeHeight / 2.0),
                     Background = expanded
-                        ? new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF6))
-                        : new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E)),
+                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x13, 0x2B, 0x39)) : new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF6)))
+                        : (isDark ? new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88))),
                     BorderBrush = expanded
-                        ? new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B))
-                        : new SolidColorBrush(Color.FromRgb(0x14, 0xB8, 0xA6)),
+                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)) : new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)))
+                        : (isDark ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : new SolidColorBrush(Color.FromRgb(0x14, 0xB8, 0xA6))),
                     BorderThickness = new Thickness(1.2),
                     Cursor = Cursors.Hand,
                     ToolTip = expanded
@@ -1262,9 +1277,9 @@ public partial class OrgChartView : UserControl
         if (_dragTargetBox != null && _dragTargetNode != null)
         {
             bool isSelected = ReferenceEquals(_dragTargetNode, _lastSelected);
-            var (_, border) = GetPalette(0);
-            _dragTargetBox.BorderBrush = isSelected ? SelectedBrush : new SolidColorBrush(border);
-            _dragTargetBox.BorderThickness = new Thickness(isSelected ? 2.5 : 1);
+            var (_, border, _) = GetPalette(0);
+            _dragTargetBox.BorderBrush = isSelected ? GetSelectedBorderBrush() : new SolidColorBrush(border);
+            _dragTargetBox.BorderThickness = new Thickness(isSelected ? 2.5 : 1.2);
         }
 
         _dragTargetBox = null;
@@ -1281,7 +1296,8 @@ public partial class OrgChartView : UserControl
             Width = box.Width,
             Height = box.Height,
             Text = node.Name,
-            FontSize = 11.5,
+            FontSize = 12.0,
+            FontWeight = FontWeights.SemiBold,
             VerticalContentAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
@@ -1317,8 +1333,6 @@ public partial class OrgChartView : UserControl
             else if (e.Key == Key.Escape) { node.IsEditing = false; RenderInternal(); e.Handled = true; }
         };
     }
-
-    private static (Color Fill, Color Border) GetPalette(int depth) => Palette[depth % Palette.Length];
 
     #region Export Diagram Features (PNG / SVG / PDF)
 
@@ -1402,11 +1416,14 @@ public partial class OrgChartView : UserControl
         double width = RootCanvas.Width;
         double height = RootCanvas.Height;
 
+        bool isDark = IsDarkTheme();
+        string bgHex = isDark ? "#0B1E28" : "#FFFFFF";
+
         var sb = new StringBuilder();
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
         sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{height.ToString("F1", CultureInfo.InvariantCulture)}\" viewBox=\"0 0 {width.ToString("F1", CultureInfo.InvariantCulture)} {height.ToString("F1", CultureInfo.InvariantCulture)}\">");
         sb.AppendLine("  <!-- Background -->");
-        sb.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#0F172A\"/>");
+        sb.AppendLine($"  <rect width=\"100%\" height=\"100%\" fill=\"{bgHex}\"/>");
         sb.AppendLine("  <!-- Connectors -->");
 
         void DrawSvgConnectors(FolderNode node)
@@ -1449,21 +1466,25 @@ public partial class OrgChartView : UserControl
         foreach (var info in layoutMap.Values)
         {
             var node = info.Node;
-            var (fill, border) = GetPalette(info.Depth);
+            var (fill, border, textCol) = GetPalette(info.Depth);
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
-            Color fillColor = isMatch ? Color.FromRgb(0xFE, 0xF0, 0x8A) : fill;
-            Color borderColor = isSelected ? Color.FromRgb(0x0F, 0x76, 0x6E) : (isMatch ? Color.FromRgb(0xD9, 0x77, 0x06) : border);
-            double borderWidth = (isSelected || isMatch) ? 2.5 : 1.0;
+            Color fillColor = isMatch ? (isDark ? Color.FromRgb(0x42, 0x20, 0x06) : Color.FromRgb(0xFE, 0xF0, 0x8A)) : fill;
+            Color borderColor = isSelected
+                ? (isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88))
+                : (isMatch ? Color.FromRgb(0xD9, 0x77, 0x06) : border);
+            Color textColor = isMatch ? (isDark ? Color.FromRgb(0xFE, 0xF0, 0x8A) : Color.FromRgb(0x85, 0x4D, 0x0E)) : textCol;
+            double borderWidth = (isSelected || isMatch) ? 2.5 : 1.2;
 
             string fillHex = ToHexColor(fillColor);
             string borderHex = ToHexColor(borderColor);
+            string textHex = ToHexColor(textColor);
             string escapedName = SecurityElement.Escape(node.Name) ?? string.Empty;
 
             sb.AppendLine("  <g>");
             sb.AppendLine($"    <rect x=\"{info.X.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{info.Y.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{info.Width.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{info.Height.ToString("F1", CultureInfo.InvariantCulture)}\" rx=\"6\" ry=\"6\" fill=\"{fillHex}\" stroke=\"{borderHex}\" stroke-width=\"{borderWidth.ToString("F1", CultureInfo.InvariantCulture)}\"/>");
-            sb.AppendLine($"    <text x=\"{info.CenterX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(info.CenterY + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"#000000\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"11.5\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
+            sb.AppendLine($"    <text x=\"{info.CenterX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{(info.CenterY + 4).ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"{textHex}\" font-family=\"Segoe UI, system-ui, sans-serif\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\">{escapedName}</text>");
 
             if (node.Children.Count > 0)
             {
@@ -1472,9 +1493,9 @@ public partial class OrgChartView : UserControl
                 double badgeWidth = expanded ? 16 : Math.Max(22, 14 + node.Children.Count.ToString().Length * 6.5);
                 double badgeX = isVertical ? info.CenterX - badgeWidth / 2.0 : info.X + info.Width - (badgeWidth / 2.0);
                 double badgeY = isVertical ? info.Y + info.Height - (badgeHeight / 2.0) : info.CenterY - (badgeHeight / 2.0);
-                string badgeBg = expanded ? "#EEF2F6" : "#0F766E";
-                string badgeStroke = expanded ? "#64748B" : "#14B8A6";
-                string badgeFg = expanded ? "#334155" : "#FFFFFF";
+                string badgeBg = expanded ? (isDark ? "#132B39" : "#EEF2F6") : (isDark ? "#0F766E" : "#0D9488");
+                string badgeStroke = expanded ? (isDark ? "#334155" : "#64748B") : (isDark ? "#2DD4BF" : "#14B8A6");
+                string badgeFg = expanded ? (isDark ? "#94A3B8" : "#334155") : "#FFFFFF";
                 string badgeLabel = expanded ? "−" : $"+{node.Children.Count}";
 
                 sb.AppendLine($"    <rect x=\"{badgeX.ToString("F1", CultureInfo.InvariantCulture)}\" y=\"{badgeY.ToString("F1", CultureInfo.InvariantCulture)}\" width=\"{badgeWidth.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{badgeHeight}\" rx=\"{badgeHeight / 2.0}\" ry=\"{badgeHeight / 2.0}\" fill=\"{badgeBg}\" stroke=\"{badgeStroke}\" stroke-width=\"1\"/>");

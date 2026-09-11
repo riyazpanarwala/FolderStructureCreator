@@ -497,6 +497,7 @@ public partial class MainWindow : Window
                 currentIndex = (currentIndex - 1 + count) % count;
 
             ViewModel.SelectedCommandPaletteItem = ViewModel.FilteredCommands[currentIndex];
+            CommandPaletteListBox.ScrollIntoView(ViewModel.SelectedCommandPaletteItem);
             e.Handled = true;
         }
     }
@@ -516,8 +517,13 @@ public partial class MainWindow : Window
         if (sender is FrameworkElement element && element.ContextMenu != null)
         {
             element.ContextMenu.PlacementTarget = element;
+            if (element.Tag != null)
+            {
+                element.ContextMenu.DataContext = element.Tag;
+            }
             element.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             element.ContextMenu.IsOpen = true;
         }
     }
 }
+

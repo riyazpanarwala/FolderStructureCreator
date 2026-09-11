@@ -24,5 +24,10 @@
     <SolidColorBrush x:Key="BrushFocusRing" Color="#FFFF00"/>
     <SolidColorBrush x:Key="BrushBadgeBg" Color="#003344"/>
     <SolidColorBrush x:Key="BrushBadgeFg" Color="#00FFFF"/>
+    <SolidColorBrush x:Key="BrushWarning" Color="#FFFF00"/>
+    <SolidColorBrush x:Key="BrushWarningSoft" Color="#333300"/>
+    <SolidColorBrush x:Key="BrushScrollbarTrack" Color="#000000"/>
+    <SolidColorBrush x:Key="BrushScrollbarThumb" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushScrollbarThumbHover" Color="#00FFFF"/>
 
 </ResourceDictionary>

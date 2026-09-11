@@ -49,6 +49,10 @@ public class MainViewModel : ViewModelBase
             if (SetField(ref _targetPath, value))
             {
                 OnPropertyChanged(nameof(TargetPathExists));
+                OnPropertyChanged(nameof(IsDestinationReady));
+                OnPropertyChanged(nameof(IsCreateReady));
+                OnPropertyChanged(nameof(ConciseStatusText));
+                OnPropertyChanged(nameof(DetailedStatusTooltip));
                 CreateStructureCommand.RaiseCanExecuteChanged();
             }
         }
@@ -86,6 +90,45 @@ public class MainViewModel : ViewModelBase
     /// <summary>Drives the builder's empty-state prompt.</summary>
     public bool HasStructureNodes => RootFolders.Count > 0;
 
+    public bool IsPlanReady => HasStructureNodes;
+    public bool IsDestinationReady => TargetPathExists;
+    public bool IsCreateReady => CanCreateStructure();
+
+    private bool _isQuickAddExpanded;
+    public bool IsQuickAddExpanded
+    {
+        get => _isQuickAddExpanded;
+        set
+        {
+            if (SetField(ref _isQuickAddExpanded, value))
+                OnPropertyChanged(nameof(IsQuickAddVisible));
+        }
+    }
+
+    public bool IsQuickAddVisible => IsQuickAddExpanded || HasQuickAddText;
+
+    private int _lastImportIgnoredCount;
+
+    public string ConciseStatusText
+    {
+        get
+        {
+            if (IsDiffActive && !string.IsNullOrEmpty(DiffSummaryText))
+                return DiffSummaryText;
+
+            if (TotalFolderCount > 0)
+            {
+                if (_lastImportIgnoredCount > 0)
+                    return $"{TotalFolderCount} folders · {_lastImportIgnoredCount} ignored";
+                return $"{TotalFolderCount} folders ready";
+            }
+
+            return "Ready";
+        }
+    }
+
+    public string DetailedStatusTooltip => string.IsNullOrWhiteSpace(StatusMessage) ? ConciseStatusText : StatusMessage;
+
     private string _quickAddNames = string.Empty;
     /// <summary>Comma-separated names typed into the quick-add box, e.g. "src, docs, tests".</summary>
     public string QuickAddNames
@@ -94,7 +137,10 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetField(ref _quickAddNames, value))
+            {
                 OnPropertyChanged(nameof(HasQuickAddText));
+                OnPropertyChanged(nameof(IsQuickAddVisible));
+            }
         }
     }
 
@@ -105,7 +151,14 @@ public class MainViewModel : ViewModelBase
     public string StatusMessage
     {
         get => _statusMessage;
-        set => SetField(ref _statusMessage, value);
+        set
+        {
+            if (SetField(ref _statusMessage, value))
+            {
+                OnPropertyChanged(nameof(ConciseStatusText));
+                OnPropertyChanged(nameof(DetailedStatusTooltip));
+            }
+        }
     }
 
     private bool _isLiveSyncMode = true;
@@ -266,6 +319,12 @@ public class MainViewModel : ViewModelBase
 
     private void RaiseStructureChanged()
     {
+        OnPropertyChanged(nameof(TotalFolderCount));
+        OnPropertyChanged(nameof(HasStructureNodes));
+        OnPropertyChanged(nameof(IsPlanReady));
+        OnPropertyChanged(nameof(IsCreateReady));
+        OnPropertyChanged(nameof(ConciseStatusText));
+        OnPropertyChanged(nameof(DetailedStatusTooltip));
         StructureChanged?.Invoke();
         ExpandAllOrgChartCommand?.RaiseCanExecuteChanged();
         CollapseAllOrgChartCommand?.RaiseCanExecuteChanged();
@@ -411,6 +470,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand AddChildFolderCommand { get; }
     public RelayCommand AddSiblingFolderCommand { get; }
     public RelayCommand QuickAddCommand { get; }
+    public RelayCommand ToggleQuickAddCommand { get; }
     public RelayCommand DeleteNodeCommand { get; }
     public RelayCommand MoveToRootCommand { get; }
     public RelayCommand RefreshDrivesCommand { get; }
@@ -455,6 +515,7 @@ public class MainViewModel : ViewModelBase
         AddChildFolderCommand = new RelayCommand(_ => AddChild(), _ => SelectedStructureNode is { IsFile: false });
         AddSiblingFolderCommand = new RelayCommand(_ => AddSibling(), _ => SelectedStructureNode != null);
         QuickAddCommand = new RelayCommand(_ => QuickAdd(), _ => !string.IsNullOrWhiteSpace(QuickAddNames));
+        ToggleQuickAddCommand = new RelayCommand(_ => IsQuickAddExpanded = !IsQuickAddExpanded);
         DeleteNodeCommand = new RelayCommand(_ => DeleteSelected(), _ => SelectedStructureNode != null);
         MoveToRootCommand = new RelayCommand(_ => MoveNodeToRoot(SelectedStructureNode!), _ => SelectedStructureNode?.Parent != null);
         RefreshDrivesCommand = new RelayCommand(_ => LoadDrives());
@@ -555,6 +616,10 @@ public class MainViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(TotalFolderCount));
             OnPropertyChanged(nameof(HasStructureNodes));
+            OnPropertyChanged(nameof(IsPlanReady));
+            OnPropertyChanged(nameof(IsCreateReady));
+            OnPropertyChanged(nameof(ConciseStatusText));
+            OnPropertyChanged(nameof(DetailedStatusTooltip));
             ClearPlanCommand.RaiseCanExecuteChanged();
             CreateStructureCommand.RaiseCanExecuteChanged();
             if (HasSearchQuery) ApplySearch();
@@ -665,20 +730,33 @@ public class MainViewModel : ViewModelBase
         {
             var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(folderPath) : new IgnoreRuleService(includeBuiltInDefaults: false);
             var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, MaxOrgChartNodes, ignoreRules));
-            RootFolders.Clear();
-            RootFolders.Add(importResult.Root);
-            SelectedStructureNode = importResult.Root;
-            TargetPath = folderPath;
-            IsOrgChartView = true;
-            IsLiveSyncMode = true;
 
-            string ignoreText = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
-            StatusMessage = importResult.Truncated
-                ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}. Live computer sync enabled."
-                : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText} in the org chart. Live computer sync enabled.";
+            void ApplyResult()
+            {
+                RootFolders.Clear();
+                RootFolders.Add(importResult.Root);
+                SelectedStructureNode = importResult.Root;
+                TargetPath = folderPath;
+                IsOrgChartView = true;
+                IsLiveSyncMode = true;
 
-            OnPropertyChanged(nameof(TotalFolderCount));
-            RaiseStructureChanged();
+                string ignoreText = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
+                StatusMessage = importResult.Truncated
+                    ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}. Live computer sync enabled."
+                    : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText} in the org chart. Live computer sync enabled.";
+
+                OnPropertyChanged(nameof(TotalFolderCount));
+                RaiseStructureChanged();
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(ApplyResult);
+            }
+            else
+            {
+                ApplyResult();
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
         {
@@ -1307,6 +1385,7 @@ public class MainViewModel : ViewModelBase
             var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, FileSystemService.MaxImportTotalNodes, ignoreRules));
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
+            _lastImportIgnoredCount = importResult.IgnoredCount;
 
             string ignoreInfo = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
             var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}.";
@@ -1339,6 +1418,7 @@ public class MainViewModel : ViewModelBase
 
         RootFolders.Clear();
         SelectedStructureNode = null;
+        _lastImportIgnoredCount = 0;
         StatusMessage = "Plan cleared. Add folders manually or import from an existing folder.";
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
