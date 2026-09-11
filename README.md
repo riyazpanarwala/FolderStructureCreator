@@ -9,7 +9,8 @@ A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse 
 ### 🎨 Theme System (Dark, Light, High Contrast, & System Sync)
 - **4 Theme Modes** — Switch seamlessly between 🌙 **Dark**, ☀️ **Light**, 🔲 **High Contrast**, and 💻 **System Match** (automatically detects Windows OS dark/light registry settings `AppsUseLightTheme` and `SystemParameters.HighContrast`).
 - **Persistent Preferences** — Saves your theme choice automatically to `%APPDATA%/FolderStructureCreator/settings.json`.
-- **High-Contrast Canvas & Diagram Palette** — High-contrast WCAG AAA compliant typography and box rendering across all themes.
+- **Themed Scrollbars & Modern Tooltips** — Sleek rounded scrollbar thumbs and themed tooltips with subtle border glow, fully styled to match each theme palette.
+- **Accessible Hover States** — High-contrast WCAG AAA compliant typography, box rendering, and hover feedback across all view toggles and action buttons.
 
 ### ⚡ Spotlight Command Palette (`Ctrl + K`)
 - **Keyboard Spotlight Overlay** — Press `Ctrl + K` anywhere in the app (or click `⚡ Command Palette (Ctrl+K)` on the top toolbar) to open a spotlight command search bar over the app.
@@ -29,11 +30,18 @@ A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse 
   - 🟠 **`[⚡ EXTRA]`** — Exists on **disk**, but is **NOT** in your Blueprint (Amber/Orange).
 - **Incremental Creation** — Click **`🟢 Create Missing Only`** to create missing blueprint folders on disk without modifying or overwriting existing files.
 
+### 🚦 Dynamic 3-Step Workflow Readiness Stepper
+- **Live Readiness Indicators** — Clear header stepper indicators that guide the creation process:
+  - **`1. Plan`** — Shows live count of planned folders (`✓ Plan (N)`), or indicates when a blueprint draft needs to be created.
+  - **`2. Destination`** — Highlights destination selection (`✓ Destination`) once a target directory is chosen.
+  - **`3. Create`** — Activates clearly (`▶ Ready to create`) when both requirements are met, transitions to `Creating...` during disk writes, and marks `✓ Created` once execution succeeds.
+- **Header Status Feedback** — Clear inline status messages indicating real-time application state without blocking interaction.
+
 ### 🛠️ Building & Designing the Blueprint Plan
 - **+ Add Root Folder** — Create top-level root folders to start building a structure plan from scratch.
 - **Quick Batch-Add** — Type comma-separated folder names (e.g., `src, docs, tests, scripts`), press **Enter** (or click **Add**), and all of them are added at once. If a folder is selected, they are added as subfolders; otherwise, as new root folders.
 - **📥 Import Reference Folder & Drag & Drop** — Pick any folder on your computer OR drag and drop folders directly from Windows Explorer into the application window/TreeView to instantly import its directory hierarchy.
-- **🚫 Smart Import & Ignore Rules (`.structureignore`)** — Automatically filters out build, cache, and system subfolders (`node_modules`, `.git`, `.vs`, `bin`, `obj`, `dist`, `build`, etc.) during imports, and respects `.structureignore` or `.gitignore` files found in the source directory. Can be toggled on/off via the toolbar.
+- **🚫 Smart Ignore Rules (`.structureignore` / `.gitignore`)** — Automatically filters out build, cache, and system subfolders (`node_modules`, `.git`, `.vs`, `bin`, `obj`, `dist`, `build`, etc.) during imports, and respects `.structureignore` or `.gitignore` files found in the source directory. Can be toggled on/off in the **⚙ Settings** menu.
 - **Hang-Proof Import** — Bounded directory enumeration ensures safety with huge folders (capped per level and total depth) to prevent app freezing.
 - **Clear Plan** — Clear all folders from the screen draft at once with one click (never affects files on disk).
 
@@ -61,6 +69,9 @@ Export your blueprint folder plan directly as a standalone executable script tha
 ### 👁️ Two Blueprint Views
 - **Tree View** — Classic, clean indented list view with expandable/collapsible tree nodes.
 - **Org Chart Diagram** — Interactive dendrogram diagram with depth-colored boxes and right-angle connector lines.
+  - **Enhanced Selection & Framing** — Selected nodes feature a distinct turquoise glow ring and selection bullet (`● `) while preserving original depth colors. Viewport framing is clamped to natural 100% zoom max so small structures aren't unnaturally blown up.
+  - **Non-Destructive Navigation** — Blueprint node additions and edits preserve your current scroll/pan position without jumpy resets.
+  - **Expand/Collapse Controls** — Compact 22px interactive badge buttons displaying subfolder count with hover transitions.
   - **📷 Diagram Export (PNG / SVG / PDF)** — Export the complete dendrogram diagram to high-resolution PNG images, SVG vector graphics, or PDF vector documents with full depth coloring and connector lines.
   - **Layout Direction Toggle** — Dynamically switch diagram orientation between **Horizontal (Left-to-Right ➡️)** and **Vertical (Top-to-Bottom ⬇️)** dendrogram views via the toolbar toggle button.
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
@@ -91,7 +102,7 @@ Export your blueprint folder plan directly as a standalone executable script tha
 ### 📁 Live Computer Directory Browser & Targets
 - **Lazy-Loaded Windows Drives Browser** — Browse drives, pinned folders, and real computer directories on the left sidebar. Nothing is loaded until expanded, ensuring maximum performance even on huge drives.
 - **Natural Folder Sorting & Sort Order Toggle** — Folder names are sorted naturally by number first (`1, 2, 3 ... 10, 11`), followed by alphabetical names (`A-Z`). Includes a **Sort: A-Z ⬇ / Sort: Z-A ⬆** toolbar toggle to dynamically switch between ascending and descending sort order across pinned folders and drive trees.
-- **Pinned Folders** — Pin frequently used folder locations for quick target selection.
+- **Pinned Folders** — Pin frequently used folder locations for quick target selection. Features a 1-click **Chart** button to immediately visualize any pinned folder in the Org Chart diagram, and a **`...`** overflow menu to **Select as Destination**, **Open in Explorer**, or **Unpin Folder**.
 - **One-Click Structure Creation** — Recursively creates every folder in your plan under the target directory path. Existing folders are preserved safely.
 - **Auto-Expansion** — After creation, the live browser automatically expands down to display all newly created folders.
 - **Windows Path Sanitization** — Automatically sanitizes invalid filename characters (`<>:"/\|?*`) and reserved names (`CON`, `PRN`, `AUX`, etc.).
