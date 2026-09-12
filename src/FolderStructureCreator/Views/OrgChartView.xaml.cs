@@ -20,6 +20,13 @@ public enum OrgChartLayoutDirection
     Vertical
 }
 
+public enum OrgChartConnectorStyle
+{
+    Orthogonal,
+    Curved,
+    Straight
+}
+
 /// <summary>
 /// A horizontal or vertical org-chart / dendrogram style visualization of a folder structure -
 /// colored boxes per depth level, connected by right-angle elbow lines, laid out left-to-right or top-to-bottom.
@@ -42,6 +49,27 @@ public partial class OrgChartView : UserControl
     }
 
     private static void OnLayoutDirectionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is OrgChartView chart)
+        {
+            chart.RenderInternal();
+        }
+    }
+
+    public static readonly DependencyProperty ConnectorStyleProperty =
+        DependencyProperty.Register(
+            nameof(ConnectorStyle),
+            typeof(OrgChartConnectorStyle),
+            typeof(OrgChartView),
+            new FrameworkPropertyMetadata(OrgChartConnectorStyle.Orthogonal, OnConnectorStyleChanged));
+
+    public OrgChartConnectorStyle ConnectorStyle
+    {
+        get => (OrgChartConnectorStyle)GetValue(ConnectorStyleProperty);
+        set => SetValue(ConnectorStyleProperty, value);
+    }
+
+    private static void OnConnectorStyleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is OrgChartView chart)
         {
@@ -729,19 +757,46 @@ public partial class OrgChartView : UserControl
 
                 var figure = new PathFigure { StartPoint = startPoint };
 
-                if (isVertical)
+                switch (ConnectorStyle)
                 {
-                    double midY = (startPoint.Y + endPoint.Y) / 2.0;
-                    figure.Segments.Add(new LineSegment(new Point(startPoint.X, midY), true));
-                    figure.Segments.Add(new LineSegment(new Point(endPoint.X, midY), true));
-                    figure.Segments.Add(new LineSegment(endPoint, true));
-                }
-                else
-                {
-                    double midX = (startPoint.X + endPoint.X) / 2.0;
-                    figure.Segments.Add(new LineSegment(new Point(midX, startPoint.Y), true));
-                    figure.Segments.Add(new LineSegment(new Point(midX, endPoint.Y), true));
-                    figure.Segments.Add(new LineSegment(endPoint, true));
+                    case OrgChartConnectorStyle.Straight:
+                        figure.Segments.Add(new LineSegment(endPoint, true));
+                        break;
+
+                    case OrgChartConnectorStyle.Curved:
+                        if (isVertical)
+                        {
+                            double dy = (endPoint.Y - startPoint.Y) * 0.5;
+                            var c1 = new Point(startPoint.X, startPoint.Y + dy);
+                            var c2 = new Point(endPoint.X, endPoint.Y - dy);
+                            figure.Segments.Add(new BezierSegment(c1, c2, endPoint, true));
+                        }
+                        else
+                        {
+                            double dx = (endPoint.X - startPoint.X) * 0.5;
+                            var c1 = new Point(startPoint.X + dx, startPoint.Y);
+                            var c2 = new Point(endPoint.X - dx, endPoint.Y);
+                            figure.Segments.Add(new BezierSegment(c1, c2, endPoint, true));
+                        }
+                        break;
+
+                    case OrgChartConnectorStyle.Orthogonal:
+                    default:
+                        if (isVertical)
+                        {
+                            double midY = (startPoint.Y + endPoint.Y) / 2.0;
+                            figure.Segments.Add(new LineSegment(new Point(startPoint.X, midY), true));
+                            figure.Segments.Add(new LineSegment(new Point(endPoint.X, midY), true));
+                            figure.Segments.Add(new LineSegment(endPoint, true));
+                        }
+                        else
+                        {
+                            double midX = (startPoint.X + endPoint.X) / 2.0;
+                            figure.Segments.Add(new LineSegment(new Point(midX, startPoint.Y), true));
+                            figure.Segments.Add(new LineSegment(new Point(midX, endPoint.Y), true));
+                            figure.Segments.Add(new LineSegment(endPoint, true));
+                        }
+                        break;
                 }
 
                 var geometry = new PathGeometry();
@@ -1539,15 +1594,42 @@ public partial class OrgChartView : UserControl
 
                 string strokeColor = ToHexColor(GetPalette(childLayout.Depth).Border);
 
-                if (isVertical)
+                switch (ConnectorStyle)
                 {
-                    double midY = (startPoint.Y + endPoint.Y) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
-                }
-                else
-                {
-                    double midX = (startPoint.X + endPoint.X) / 2.0;
-                    sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                    case OrgChartConnectorStyle.Straight:
+                        sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        break;
+
+                    case OrgChartConnectorStyle.Curved:
+                        if (isVertical)
+                        {
+                            double dy = (endPoint.Y - startPoint.Y) * 0.5;
+                            Point c1 = new Point(startPoint.X, startPoint.Y + dy);
+                            Point c2 = new Point(endPoint.X, endPoint.Y - dy);
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} C {c1.X.ToString("F1", CultureInfo.InvariantCulture)},{c1.Y.ToString("F1", CultureInfo.InvariantCulture)} {c2.X.ToString("F1", CultureInfo.InvariantCulture)},{c2.Y.ToString("F1", CultureInfo.InvariantCulture)} {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        else
+                        {
+                            double dx = (endPoint.X - startPoint.X) * 0.5;
+                            Point c1 = new Point(startPoint.X + dx, startPoint.Y);
+                            Point c2 = new Point(endPoint.X - dx, endPoint.Y);
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} C {c1.X.ToString("F1", CultureInfo.InvariantCulture)},{c1.Y.ToString("F1", CultureInfo.InvariantCulture)} {c2.X.ToString("F1", CultureInfo.InvariantCulture)},{c2.Y.ToString("F1", CultureInfo.InvariantCulture)} {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        break;
+
+                    case OrgChartConnectorStyle.Orthogonal:
+                    default:
+                        if (isVertical)
+                        {
+                            double midY = (startPoint.Y + endPoint.Y) / 2.0;
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        else
+                        {
+                            double midX = (startPoint.X + endPoint.X) / 2.0;
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        break;
                 }
 
                 DrawSvgConnectors(child);

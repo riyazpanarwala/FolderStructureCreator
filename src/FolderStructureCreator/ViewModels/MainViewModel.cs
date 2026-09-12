@@ -4,6 +4,7 @@ using System.Security;
 using System.Windows;
 using FolderStructureCreator.Models;
 using FolderStructureCreator.Services;
+using FolderStructureCreator.Views;
 using Microsoft.Win32;
 
 namespace FolderStructureCreator.ViewModels;
@@ -277,6 +278,57 @@ public class MainViewModel : ViewModelBase
 
     public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Vertical" : "Horizontal";
 
+    private OrgChartConnectorStyle _connectorStyle = OrgChartConnectorStyle.Orthogonal;
+    /// <summary>Connector line style: Orthogonal (right angles), Curved (smooth Bézier), or Straight (direct diagonal lines).</summary>
+    public OrgChartConnectorStyle ConnectorStyle
+    {
+        get => _connectorStyle;
+        set
+        {
+            if (SetField(ref _connectorStyle, value))
+            {
+                OnPropertyChanged(nameof(ConnectorStyleButtonText));
+                OnPropertyChanged(nameof(ConnectorStyleTooltip));
+                OnPropertyChanged(nameof(IsOrthogonalConnector));
+                OnPropertyChanged(nameof(IsCurvedConnector));
+                OnPropertyChanged(nameof(IsStraightConnector));
+                RaiseStructureChanged();
+            }
+        }
+    }
+
+    public string ConnectorStyleButtonText => ConnectorStyle switch
+    {
+        OrgChartConnectorStyle.Curved => "Curved",
+        OrgChartConnectorStyle.Straight => "Straight",
+        _ => "Orthogonal"
+    };
+
+    public string ConnectorStyleTooltip => ConnectorStyle switch
+    {
+        OrgChartConnectorStyle.Curved => "Connector style: Curved (smooth Bézier splines). Click to cycle.",
+        OrgChartConnectorStyle.Straight => "Connector style: Straight (direct diagonal tree lines). Click to cycle.",
+        _ => "Connector style: Orthogonal (classic right-angles). Click to cycle."
+    };
+
+    public bool IsOrthogonalConnector => ConnectorStyle == OrgChartConnectorStyle.Orthogonal;
+    public bool IsCurvedConnector => ConnectorStyle == OrgChartConnectorStyle.Curved;
+    public bool IsStraightConnector => ConnectorStyle == OrgChartConnectorStyle.Straight;
+
+    public void CycleConnectorStyle()
+    {
+        ConnectorStyle = ConnectorStyle switch
+        {
+            OrgChartConnectorStyle.Orthogonal => OrgChartConnectorStyle.Curved,
+            OrgChartConnectorStyle.Curved => OrgChartConnectorStyle.Straight,
+            _ => OrgChartConnectorStyle.Orthogonal
+        };
+    }
+
+    public void SetConnectorStyle(OrgChartConnectorStyle style)
+    {
+        ConnectorStyle = style;
+    }
 
     private bool _isDestinationSidebarCollapsed;
     /// <summary>Lets the chart use the full workspace on smaller screens without clearing the selected target.</summary>
@@ -591,6 +643,8 @@ public class MainViewModel : ViewModelBase
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
+    public RelayCommand CycleConnectorStyleCommand { get; }
+    public RelayCommand SetConnectorStyleCommand { get; }
     public RelayCommand ExpandAllOrgChartCommand { get; }
     public RelayCommand CollapseAllOrgChartCommand { get; }
     public RelayCommand ExpandAllTreeCommand { get; }
@@ -680,6 +734,14 @@ public class MainViewModel : ViewModelBase
                 SelectPinnedFolder(new PinnedFolder(s));
         });
         ToggleSortOrderCommand = new RelayCommand(_ => IsSortAscending = !IsSortAscending);
+        CycleConnectorStyleCommand = new RelayCommand(_ => CycleConnectorStyle());
+        SetConnectorStyleCommand = new RelayCommand(param =>
+        {
+            if (param is OrgChartConnectorStyle style)
+                SetConnectorStyle(style);
+            else if (param is string str && Enum.TryParse<OrgChartConnectorStyle>(str, out var parsed))
+                SetConnectorStyle(parsed);
+        });
         SetThemeCommand = new RelayCommand(param =>
         {
             if (param is AppTheme t)
@@ -1668,6 +1730,10 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "≡", ShowTreeViewCommand));
         AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "☵", ShowOrgChartViewCommand));
         AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "⇄", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Cycle Connector Line Style (Orthogonal / Curved / Straight)", "Org Chart", "⤹", CycleConnectorStyleCommand));
+        AllCommands.Add(new CommandItem("Connector Style: Orthogonal (Right-Angles)", "Org Chart", "⌐", SetConnectorStyleCommand, commandParameter: OrgChartConnectorStyle.Orthogonal));
+        AllCommands.Add(new CommandItem("Connector Style: Curved (Smooth Bézier)", "Org Chart", "∿", SetConnectorStyleCommand, commandParameter: OrgChartConnectorStyle.Curved));
+        AllCommands.Add(new CommandItem("Connector Style: Straight (Direct Lines)", "Org Chart", "╲", SetConnectorStyleCommand, commandParameter: OrgChartConnectorStyle.Straight));
         AllCommands.Add(new CommandItem("Expand All Chart Folders", "Org Chart", "⊞", ExpandAllOrgChartCommand));
         AllCommands.Add(new CommandItem("Collapse All Chart Folders", "Org Chart", "⊟", CollapseAllOrgChartCommand));
         AllCommands.Add(new CommandItem("Expand All Tree Folders", "Tree View", "⊞", ExpandAllTreeCommand));

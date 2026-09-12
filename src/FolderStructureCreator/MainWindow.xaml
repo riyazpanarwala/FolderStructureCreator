@@ -741,6 +741,32 @@
                                             <TextBlock Text="{Binding OrgChartLayoutButtonText}" FontSize="11.5"/>
                                         </StackPanel>
                                     </Button>
+                                    <!-- Connector Style Selector Button -->
+                                    <Button Style="{StaticResource ToolButton}" Command="{Binding CycleConnectorStyleCommand}" ToolTip="{Binding ConnectorStyleTooltip}" Margin="0,0,4,0" Padding="8,4">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}" Width="11" Height="11" Margin="0,0,4,0"/>
+                                            <TextBlock Text="{Binding ConnectorStyleButtonText}" FontSize="11.5"/>
+                                        </StackPanel>
+                                        <Button.ContextMenu>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsChecked="{Binding IsOrthogonalConnector}">
+                                                    <MenuItem.Icon>
+                                                        <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsChecked="{Binding IsCurvedConnector}">
+                                                    <MenuItem.Icon>
+                                                        <Path Data="{StaticResource CurvedLineGeometry}" Style="{StaticResource NavIcon}"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsChecked="{Binding IsStraightConnector}">
+                                                    <MenuItem.Icon>
+                                                        <Path Data="{StaticResource StraightLineGeometry}" Style="{StaticResource NavIcon}"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button Style="{StaticResource IconButton}" Click="ZoomOutOrgChart_Click" ToolTip="Zoom out (Ctrl + -)" AutomationProperties.Name="Zoom out" Width="26" Height="26" Padding="4">
                                         <Path Data="{StaticResource MinusGeometry}" Style="{StaticResource NavIcon}" Width="10" Height="10"/>
                                     </Button>
@@ -776,6 +802,15 @@
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource ExpandGeometry}" Style="{StaticResource NavIcon}"/>
                                                     </MenuItem.Icon>
+                                                </MenuItem>
+                                                <Separator/>
+                                                <MenuItem Header="Connector Style">
+                                                    <MenuItem.Icon>
+                                                        <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}"/>
+                                                    </MenuItem.Icon>
+                                                    <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsChecked="{Binding IsOrthogonalConnector}"/>
+                                                    <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsChecked="{Binding IsCurvedConnector}"/>
+                                                    <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsChecked="{Binding IsStraightConnector}"/>
                                                 </MenuItem>
                                                 <Separator/>
                                                 <MenuItem Header="Expand All Branches" Command="{Binding ExpandAllOrgChartCommand}">
@@ -925,7 +960,7 @@
                         </TreeView>
 
                         <!-- Visual Interactive Org Chart -->
-                        <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
+                        <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" ConnectorStyle="{Binding ConnectorStyle}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
 
                         <!-- Restrained Clean Empty State Prompt -->
                         <Border Background="{DynamicResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}">
@@ -973,6 +1008,12 @@
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}" Width="11" Height="11" Margin="0,0,4,0"/>
                                             <TextBlock Text="{Binding OrgChartLayoutButtonText}" FontSize="11"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolButton}" Command="{Binding CycleConnectorStyleCommand}" ToolTip="{Binding ConnectorStyleTooltip}" Padding="6,3" Margin="0,0,3,0">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}" Width="10" Height="10" Margin="0,0,4,0"/>
+                                            <TextBlock Text="{Binding ConnectorStyleButtonText}" FontSize="11"/>
                                         </StackPanel>
                                     </Button>
                                     <Button Style="{StaticResource IconButton}" Click="ZoomOutOrgChart_Click" ToolTip="Zoom out (Ctrl + -)" Width="24" Height="24" Padding="3">
