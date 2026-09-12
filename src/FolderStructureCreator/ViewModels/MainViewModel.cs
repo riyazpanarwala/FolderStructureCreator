@@ -311,9 +311,23 @@ public class MainViewModel : ViewModelBase
         _ => "Connector style: Orthogonal (classic right-angles). Click to cycle."
     };
 
-    public bool IsOrthogonalConnector => ConnectorStyle == OrgChartConnectorStyle.Orthogonal;
-    public bool IsCurvedConnector => ConnectorStyle == OrgChartConnectorStyle.Curved;
-    public bool IsStraightConnector => ConnectorStyle == OrgChartConnectorStyle.Straight;
+    public bool IsOrthogonalConnector
+    {
+        get => ConnectorStyle == OrgChartConnectorStyle.Orthogonal;
+        set { if (value) ConnectorStyle = OrgChartConnectorStyle.Orthogonal; }
+    }
+
+    public bool IsCurvedConnector
+    {
+        get => ConnectorStyle == OrgChartConnectorStyle.Curved;
+        set { if (value) ConnectorStyle = OrgChartConnectorStyle.Curved; }
+    }
+
+    public bool IsStraightConnector
+    {
+        get => ConnectorStyle == OrgChartConnectorStyle.Straight;
+        set { if (value) ConnectorStyle = OrgChartConnectorStyle.Straight; }
+    }
 
     public void CycleConnectorStyle()
     {

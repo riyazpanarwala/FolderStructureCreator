@@ -749,17 +749,17 @@
                                         </StackPanel>
                                         <Button.ContextMenu>
                                             <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                                <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsChecked="{Binding IsOrthogonalConnector}">
+                                                <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsCheckable="True" IsChecked="{Binding IsOrthogonalConnector, Mode=OneWay}">
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}"/>
                                                     </MenuItem.Icon>
                                                 </MenuItem>
-                                                <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsChecked="{Binding IsCurvedConnector}">
+                                                <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsCheckable="True" IsChecked="{Binding IsCurvedConnector, Mode=OneWay}">
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource CurvedLineGeometry}" Style="{StaticResource NavIcon}"/>
                                                     </MenuItem.Icon>
                                                 </MenuItem>
-                                                <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsChecked="{Binding IsStraightConnector}">
+                                                <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsCheckable="True" IsChecked="{Binding IsStraightConnector, Mode=OneWay}">
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource StraightLineGeometry}" Style="{StaticResource NavIcon}"/>
                                                     </MenuItem.Icon>
@@ -808,9 +808,9 @@
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}"/>
                                                     </MenuItem.Icon>
-                                                    <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsChecked="{Binding IsOrthogonalConnector}"/>
-                                                    <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsChecked="{Binding IsCurvedConnector}"/>
-                                                    <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsChecked="{Binding IsStraightConnector}"/>
+                                                    <MenuItem Header="Orthogonal (Right-Angles)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsCheckable="True" IsChecked="{Binding IsOrthogonalConnector, Mode=OneWay}"/>
+                                                    <MenuItem Header="Curved (Smooth Bézier)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Curved}" IsCheckable="True" IsChecked="{Binding IsCurvedConnector, Mode=OneWay}"/>
+                                                    <MenuItem Header="Straight (Direct Lines)" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Straight}" IsCheckable="True" IsChecked="{Binding IsStraightConnector, Mode=OneWay}"/>
                                                 </MenuItem>
                                                 <Separator/>
                                                 <MenuItem Header="Expand All Branches" Command="{Binding ExpandAllOrgChartCommand}">
