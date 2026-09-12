@@ -251,6 +251,7 @@ public partial class MainWindow : Window
     private WindowState _previousWindowState = WindowState.Normal;
     private WindowStyle _previousWindowStyle = WindowStyle.SingleBorderWindow;
     private ResizeMode _previousResizeMode = ResizeMode.CanResize;
+    private (double Zoom, double Horizontal, double Vertical)? _previousChartViewport;
 
     public void ToggleFullscreenWindow()
     {
@@ -260,10 +261,19 @@ public partial class MainWindow : Window
             WindowStyle = _previousWindowStyle;
             ResizeMode = _previousResizeMode;
             WindowState = _previousWindowState;
+            if (_previousChartViewport is { } viewport)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (!ViewModel.IsFullscreenMode)
+                        OrgChartHost.RestoreViewport(viewport);
+                }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            }
         }
         else
         {
             _previousWindowState = WindowState;
+            _previousChartViewport = OrgChartHost.CaptureViewport();
             _previousWindowStyle = WindowStyle;
             _previousResizeMode = ResizeMode;
 

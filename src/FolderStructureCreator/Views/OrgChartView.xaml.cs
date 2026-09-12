@@ -329,6 +329,19 @@ public partial class OrgChartView : UserControl
 
     public void ResetZoom() => SetZoom(1.0);
 
+    public (double Zoom, double Horizontal, double Vertical) CaptureViewport() =>
+        (ChartScale.ScaleX, ChartScrollViewer.HorizontalOffset, ChartScrollViewer.VerticalOffset);
+
+    public void RestoreViewport((double Zoom, double Horizontal, double Vertical) viewport)
+    {
+        SetZoom(viewport.Zoom);
+        UpdateLayout();
+        UpdateContainerAlignment();
+        UpdateLayout();
+        ChartScrollViewer.ScrollToHorizontalOffset(viewport.Horizontal);
+        ChartScrollViewer.ScrollToVerticalOffset(viewport.Vertical);
+    }
+
     public void ZoomAtPoint(double newZoom, Point viewportPoint)
     {
         var oldZoom = ChartScale.ScaleX;
@@ -949,9 +962,9 @@ public partial class OrgChartView : UserControl
                 box.Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88),
-                    BlurRadius = 12,
+                    BlurRadius = 6,
                     ShadowDepth = 0,
-                    Opacity = 0.85
+                    Opacity = 0.3
                 };
             }
 
