@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         OrgChartHost.ZoomLevelChanged += zoom => UpdateZoomPercentageDisplay(zoom);
         OrgChartHost.StructureEdited += () => { }; // rename already applied directly to the model; nothing else to sync
         ViewModel.RequestExportScript += () => ExportScript_Click(this, new RoutedEventArgs());
+        ViewModel.RequestToggleFullscreen += ToggleFullscreenWindow;
         Loaded += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         SizeChanged += (_, _) => ViewModel.UpdateWindowWidth(ActualWidth);
         KeyDown += Window_KeyDown;
@@ -40,6 +41,22 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F11)
+        {
+            ToggleFullscreenWindow();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && ViewModel.IsFullscreenMode)
+        {
+            if (!ViewModel.IsCommandPaletteOpen && !ViewModel.IsSearchDropdownOpen)
+            {
+                ToggleFullscreenWindow();
+                e.Handled = true;
+                return;
+            }
+        }
         if (ViewModel.IsOrgChartView && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             if (e.Key is Key.OemPlus or Key.Add)
@@ -231,9 +248,41 @@ public partial class MainWindow : Window
         }
     }
 
+    private WindowState _previousWindowState = WindowState.Normal;
+    private WindowStyle _previousWindowStyle = WindowStyle.SingleBorderWindow;
+    private ResizeMode _previousResizeMode = ResizeMode.CanResize;
+
+    public void ToggleFullscreenWindow()
+    {
+        if (ViewModel.IsFullscreenMode)
+        {
+            ViewModel.IsFullscreenMode = false;
+            WindowStyle = _previousWindowStyle;
+            ResizeMode = _previousResizeMode;
+            WindowState = _previousWindowState;
+        }
+        else
+        {
+            _previousWindowState = WindowState;
+            _previousWindowStyle = WindowStyle;
+            _previousResizeMode = ResizeMode;
+
+            ViewModel.IsFullscreenMode = true;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            if (WindowState == WindowState.Maximized)
+            {
+                WindowState = WindowState.Normal;
+            }
+            WindowState = WindowState.Maximized;
+        }
+    }
+
     private void UpdateZoomPercentageDisplay(double zoom)
     {
-        ZoomPercentageButton.Content = $"{Math.Round(zoom * 100)}%";
+        string text = $"{Math.Round(zoom * 100)}%";
+        if (ZoomPercentageButton != null) ZoomPercentageButton.Content = text;
+        if (FullscreenZoomPercentageButton != null) FullscreenZoomPercentageButton.Content = text;
     }
 
     private void ZoomInOrgChart_Click(object sender, RoutedEventArgs e) => OrgChartHost.ZoomIn();

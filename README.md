@@ -77,6 +77,11 @@ Export your blueprint folder plan directly as a standalone executable script tha
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
   - **Double-Click to Open in Explorer** — Double-click any folder node in Tree View or box on the diagram canvas to open its physical location in Windows Explorer.
 
+### 🖥️ Fullscreen Meeting Mode (`F11`)
+- **Distraction-Free Architecture Whiteboard** — Press **`F11`** (or click **`Fullscreen`** on the chart/tree toolbar or in Settings) to hide all toolbars, destination sidebars, and edit controls, transforming the app into an edge-to-edge interactive architecture whiteboard.
+- **Floating In-Meeting Controls** — Sleek top-right floating HUD providing one-click diagram layout toggling (Horizontal/Vertical), zoom controls (`-`, `+`, `Fit`), and a quick exit button (`✕ Exit Fullscreen`).
+- **Quick Exit** — Press **`F11`** or **`Esc`** at any time to restore the standard window layout and toolbars.
+
 ### ⚡ Command Line (CLI) & Direct Folder-to-Folder Copy
 - **Direct Folder Replication** — Replicate any existing directory's folder hierarchy directly to a target destination from terminal/PowerShell without launching the GUI.
 - **Dry-Run Preview** — Preview all nested folder paths that would be created before writing anything to disk.

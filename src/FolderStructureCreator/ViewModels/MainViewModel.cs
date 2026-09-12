@@ -283,7 +283,36 @@ public class MainViewModel : ViewModelBase
     public bool IsDestinationSidebarCollapsed
     {
         get => _isDestinationSidebarCollapsed;
-        set => SetField(ref _isDestinationSidebarCollapsed, value);
+        set
+        {
+            if (SetField(ref _isDestinationSidebarCollapsed, value))
+            {
+                OnPropertyChanged(nameof(ShouldHideDestinationSidebar));
+            }
+        }
+    }
+
+    private bool _isFullscreenMode;
+    /// <summary>Distraction-free fullscreen presentation whiteboard mode.</summary>
+    public bool IsFullscreenMode
+    {
+        get => _isFullscreenMode;
+        set
+        {
+            if (SetField(ref _isFullscreenMode, value))
+            {
+                OnPropertyChanged(nameof(ShouldHideDestinationSidebar));
+            }
+        }
+    }
+
+    public bool ShouldHideDestinationSidebar => IsFullscreenMode || IsDestinationSidebarCollapsed;
+
+    public event Action? RequestToggleFullscreen;
+
+    public void ToggleFullscreen()
+    {
+        RequestToggleFullscreen?.Invoke();
     }
 
     private bool _isWideWindow;
@@ -567,6 +596,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand ExpandAllTreeCommand { get; }
     public RelayCommand CollapseAllTreeCommand { get; }
     public RelayCommand SetThemeCommand { get; }
+    public RelayCommand ToggleFullscreenCommand { get; }
     public RelayCommand ToggleCommandPaletteCommand { get; }
     public RelayCommand OpenCommandPaletteCommand { get; }
     public RelayCommand CloseCommandPaletteCommand { get; }
@@ -658,6 +688,7 @@ public class MainViewModel : ViewModelBase
                 SelectedTheme = parsedTheme;
         });
 
+        ToggleFullscreenCommand = new RelayCommand(_ => ToggleFullscreen());
         ToggleCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = !IsCommandPaletteOpen);
         OpenCommandPaletteCommand = new RelayCommand(_ => OpenCommandPalette());
         CloseCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = false);
@@ -1633,6 +1664,7 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Clear Folder Plan", "Folder Plan", "×", ClearPlanCommand));
 
         // Views & Layout
+        AllCommands.Add(new CommandItem("Toggle Fullscreen Meeting Mode", "Presentation", "⛶", ToggleFullscreenCommand, "F11"));
         AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "≡", ShowTreeViewCommand));
         AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "☵", ShowOrgChartViewCommand));
         AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "⇄", ToggleOrgChartLayoutCommand));
