@@ -14,7 +14,7 @@ public class MainViewModel : ViewModelBase
     /// <summary>At this width, the destination browser and chart have comfortable space side by side.</summary>
     public const double SideBySideOrgChartWidth = 1500;
     /// <summary>Maximum number of folders opened/expanded on initial chart load.</summary>
-    public const int InitialMaxOpenedFolders = 200;
+    public const int InitialMaxOpenedFolders = 100;
     // A chart creates one WPF control per folder. Keep this high enough to support deep project charts,
     // while initial expansion is capped at InitialMaxOpenedFolders for crisp responsiveness.
     private const int MaxOrgChartNodes = 2500;
