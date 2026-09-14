@@ -107,8 +107,11 @@ public partial class OrgChartView : UserControl
     /// <summary>Current zoom level scale.</summary>
     public double ZoomLevel => ChartScale.ScaleX;
 
-    private const double BoxWidth = 172;
-    private const double BoxHeight = 34;
+    private const double StandardParentBoxWidth = 172;
+    private const double BoxWidth = StandardParentBoxWidth;
+    private const double MinLeafBoxWidth = 64;
+    private const double LeafHorizontalPadding = 24;
+    private const double BoxHeight = 26;
     private const double ColumnGap = 56;   // horizontal room for connector routing between columns (Horizontal mode)
     private const double MinVerticalSpacing = 12; // vertical spacing between adjacent boxes
     private const double MinHorizontalSpacing = 16;
@@ -508,9 +511,27 @@ public partial class OrgChartView : UserControl
     {
         double height = node.HasDiffBadge ? 36.0 : BoxHeight;
         double textWidth = MeasureTextWidth(node.Name, 12.0);
-        double extraPadding = (node.Children.Count > 0 && !isVertical) ? 48.0 : 38.0;
-        double requiredWidth = textWidth + extraPadding;
-        double width = Math.Max(BoxWidth, Math.Ceiling(requiredWidth));
+
+        double width;
+        if (node.Children.Count > 0)
+        {
+            // Parent box with children: keep enough standard width to clearly represent hierarchy and connector lines
+            double extraPadding = !isVertical ? 48.0 : 38.0;
+            double requiredWidth = textWidth + extraPadding;
+            width = Math.Max(StandardParentBoxWidth, Math.Ceiling(requiredWidth));
+        }
+        else
+        {
+            // Leaf box with no children: dynamic width based on content with reasonable minimum padding
+            double requiredWidth = textWidth + LeafHorizontalPadding;
+            if (node.HasDiffBadge && !string.IsNullOrEmpty(node.DiffBadgeText))
+            {
+                double badgeWidth = MeasureTextWidth(node.DiffBadgeText, 9.5) + LeafHorizontalPadding;
+                requiredWidth = Math.Max(requiredWidth, badgeWidth);
+            }
+            width = Math.Max(MinLeafBoxWidth, Math.Ceiling(requiredWidth));
+        }
+
         return (width, height);
     }
 
@@ -571,95 +592,160 @@ public partial class OrgChartView : UserControl
             for (int d = 0; d <= maxDepth; d++)
             {
                 colX[d] = runningX;
-                double cw = depthMaxWidths.TryGetValue(d, out var w) ? w : BoxWidth;
+                double cw = depthMaxWidths.TryGetValue(d, out var w) ? w : StandardParentBoxWidth;
                 runningX += cw + ColumnGap;
             }
 
-            double currentY = ChartPadding;
+            // Subtree bottom-up collision-free layout:
+            // For each subtree, we record vertical spans at each depth level.
+            // When placing adjacent subtrees, we shift the subsequent subtree down so that
+            // at every depth level, it maintains at least MinVerticalSpacing below the preceding subtree.
+            // Parents are placed at the exact vertical midpoint of their visible children.
 
-            void LayoutNodeH(FolderNode node, int depth)
+            Dictionary<int, (double MinY, double MaxY)> GetDepthProfileY(List<NodeLayoutInfo> nodes)
+            {
+                var profile = new Dictionary<int, (double MinY, double MaxY)>();
+                foreach (var n in nodes)
+                {
+                    double top = n.Y;
+                    double bottom = n.Y + n.Height;
+                    if (!profile.TryGetValue(n.Depth, out var span))
+                    {
+                        profile[n.Depth] = (top, bottom);
+                    }
+                    else
+                    {
+                        profile[n.Depth] = (Math.Min(span.MinY, top), Math.Max(span.MaxY, bottom));
+                    }
+                }
+                return profile;
+            }
+
+            double ComputeShiftY(Dictionary<int, (double MinY, double MaxY)> prevProfile, Dictionary<int, (double MinY, double MaxY)> currProfile)
+            {
+                double maxShift = 0;
+                foreach (var kvp in currProfile)
+                {
+                    int depth = kvp.Key;
+                    if (prevProfile.TryGetValue(depth, out var prevSpan))
+                    {
+                        double requiredY = prevSpan.MaxY + MinVerticalSpacing;
+                        double overlap = requiredY - kvp.Value.MinY;
+                        if (overlap > maxShift)
+                        {
+                            maxShift = overlap;
+                        }
+                    }
+                }
+                return maxShift;
+            }
+
+            void ShiftNodesY(List<NodeLayoutInfo> nodes, double deltaY)
+            {
+                if (Math.Abs(deltaY) < 0.0001) return;
+                foreach (var n in nodes)
+                {
+                    n.Y += deltaY;
+                }
+            }
+
+            List<NodeLayoutInfo> LayoutSubtreeH(FolderNode node, int depth)
             {
                 var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
-                var info = new NodeLayoutInfo
+                var nodeInfo = new NodeLayoutInfo
                 {
                     Node = node,
                     Depth = depth,
                     Width = w,
                     Height = h,
-                    X = colX.TryGetValue(depth, out double cx) ? cx : (ChartPadding + depth * (BoxWidth + ColumnGap))
+                    X = colX.TryGetValue(depth, out double cx) ? cx : (ChartPadding + depth * (StandardParentBoxWidth + ColumnGap)),
+                    Y = 0
                 };
-                layoutMap[node] = info;
+                layoutMap[node] = nodeInfo;
 
                 var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
                     ? node.Children
                     : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
 
+                var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
+
                 if (visibleChildren.Count == 0)
                 {
-                    info.Y = currentY;
-                    currentY += h + MinVerticalSpacing;
+                    return allSubtreeNodes;
                 }
-                else
+
+                var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
+                Dictionary<int, (double MinY, double MaxY)> cumulativeProfile = new();
+
+                foreach (var child in visibleChildren)
                 {
-                    foreach (var child in visibleChildren)
+                    var childSubtreeNodes = LayoutSubtreeH(child, depth + 1);
+                    var childProfile = GetDepthProfileY(childSubtreeNodes);
+
+                    if (cumulativeChildrenNodes.Count > 0)
                     {
-                        LayoutNodeH(child, depth + 1);
+                        double shift = ComputeShiftY(cumulativeProfile, childProfile);
+                        if (shift > 0)
+                        {
+                            ShiftNodesY(childSubtreeNodes, shift);
+                            childProfile = GetDepthProfileY(childSubtreeNodes);
+                        }
                     }
 
-                    double firstCenterY = layoutMap[visibleChildren[0]].CenterY;
-                    double lastCenterY = layoutMap[visibleChildren[^1]].CenterY;
-                    double desiredCenterY = (firstCenterY + lastCenterY) / 2.0;
-                    info.Y = desiredCenterY - h / 2.0;
+                    cumulativeChildrenNodes.AddRange(childSubtreeNodes);
+
+                    foreach (var kvp in childProfile)
+                    {
+                        if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
+                        {
+                            cumulativeProfile[kvp.Key] = kvp.Value;
+                        }
+                        else
+                        {
+                            cumulativeProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
+                        }
+                    }
                 }
+
+                // Center parent over its first and last visible children
+                double firstChildCenter = layoutMap[visibleChildren[0]].CenterY;
+                double lastChildCenter = layoutMap[visibleChildren[^1]].CenterY;
+                double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
+                nodeInfo.Y = desiredCenter - h / 2.0;
+
+                allSubtreeNodes.AddRange(cumulativeChildrenNodes);
+                return allSubtreeNodes;
             }
+
+            var cumulativeRootNodes = new List<NodeLayoutInfo>();
+            Dictionary<int, (double MinY, double MaxY)> cumulativeRootProfile = new();
 
             foreach (var root in roots)
             {
-                LayoutNodeH(root, 0);
-            }
+                var rootSubtreeNodes = LayoutSubtreeH(root, 0);
+                var rootProfile = GetDepthProfileY(rootSubtreeNodes);
 
-            // Guarantee no two boxes overlap at the same depth column
-            bool adjusted = true;
-            int passes = 0;
-            while (adjusted && passes++ < 30)
-            {
-                adjusted = false;
-                var byDepth = layoutMap.Values.GroupBy(x => x.Depth).OrderBy(g => g.Key);
-                foreach (var group in byDepth)
+                if (cumulativeRootNodes.Count > 0)
                 {
-                    var sorted = group.OrderBy(x => x.Y).ToList();
-                    for (int i = 0; i < sorted.Count - 1; i++)
+                    double shift = ComputeShiftY(cumulativeRootProfile, rootProfile);
+                    if (shift > 0)
                     {
-                        var a = sorted[i];
-                        var b = sorted[i + 1];
-                        double requiredMinY = a.Y + a.Height + MinVerticalSpacing;
-                        if (b.Y < requiredMinY)
-                        {
-                            double shift = requiredMinY - b.Y;
-                            ShiftSubtree(b.Node, 0, shift, layoutMap);
-                            adjusted = true;
-                        }
+                        ShiftNodesY(rootSubtreeNodes, shift);
+                        rootProfile = GetDepthProfileY(rootSubtreeNodes);
                     }
                 }
 
-                // Re-center parents over visible children
-                foreach (var info in layoutMap.Values)
+                cumulativeRootNodes.AddRange(rootSubtreeNodes);
+
+                foreach (var kvp in rootProfile)
                 {
-                    if (info.Node.IsExpanded && info.Node.Children.Count > 0)
+                    if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
                     {
-                        var children = info.Node.Children.Where(c => layoutMap.ContainsKey(c)).ToList();
-                        if (children.Count > 0)
-                        {
-                            double firstCenterY = layoutMap[children[0]].CenterY;
-                            double lastCenterY = layoutMap[children[^1]].CenterY;
-                            double desiredCenterY = (firstCenterY + lastCenterY) / 2.0;
-                            double desiredY = desiredCenterY - info.Height / 2.0;
-                            if (Math.Abs(desiredY - info.Y) > 0.01)
-                            {
-                                info.Y = desiredY;
-                                adjusted = true;
-                            }
-                        }
+                        cumulativeRootProfile[kvp.Key] = kvp.Value;
+                    }
+                    else
+                    {
+                        cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
                     }
                 }
             }
@@ -669,7 +755,7 @@ public partial class OrgChartView : UserControl
             {
                 double minY = layoutMap.Values.Min(i => i.Y);
                 double offsetY = ChartPadding - minY;
-                if (Math.Abs(offsetY) > 0.01)
+                if (Math.Abs(offsetY) > 0.001)
                 {
                     foreach (var info in layoutMap.Values)
                         info.Y += offsetY;
@@ -679,92 +765,184 @@ public partial class OrgChartView : UserControl
         else
         {
             // VERTICAL LAYOUT (Top to bottom tree)
-            const double levelHeight = BoxHeight + 46;
-            double currentX = ChartPadding;
-
-            void LayoutNodeV(FolderNode node, int depth)
+            const double LevelVerticalGap = 44.0;
+            var depthMaxHeights = new Dictionary<int, double>();
+            void MeasureVisibleHeights(FolderNode node, int depth)
             {
-                var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
-                var info = new NodeLayoutInfo
+                var (_, h) = GetNodeDimensions(node, depth, isVertical: true);
+                if (!depthMaxHeights.TryGetValue(depth, out double maxH) || h > maxH)
                 {
-                    Node = node,
-                    Depth = depth,
-                    Width = w,
-                    Height = h,
-                    Y = ChartPadding + depth * levelHeight
-                };
-                layoutMap[node] = info;
-
-                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
-                    ? node.Children
-                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
-
-                if (visibleChildren.Count == 0)
-                {
-                    info.X = currentX;
-                    currentX += w + MinHorizontalSpacing;
+                    depthMaxHeights[depth] = h;
                 }
-                else
-                {
-                    foreach (var child in visibleChildren)
-                    {
-                        LayoutNodeV(child, depth + 1);
-                    }
 
-                    double firstCenterX = layoutMap[visibleChildren[0]].CenterX;
-                    double lastCenterX = layoutMap[visibleChildren[^1]].CenterX;
-                    double desiredCenterX = (firstCenterX + lastCenterX) / 2.0;
-                    info.X = desiredCenterX - w / 2.0;
+                if (node.IsExpanded && node.Children.Count > 0)
+                {
+                    foreach (var child in node.Children)
+                    {
+                        MeasureVisibleHeights(child, depth + 1);
+                    }
                 }
             }
 
             foreach (var root in roots)
             {
-                LayoutNodeV(root, 0);
+                MeasureVisibleHeights(root, 0);
             }
 
-            // Guarantee no two boxes overlap at the same depth level horizontally
-            bool adjusted = true;
-            int passes = 0;
-            while (adjusted && passes++ < 30)
+            int maxDepthV = depthMaxHeights.Keys.Count > 0 ? depthMaxHeights.Keys.Max() : 0;
+            var levelY = new Dictionary<int, double>();
+            double runningY = ChartPadding;
+            for (int d = 0; d <= maxDepthV; d++)
             {
-                adjusted = false;
-                var byDepth = layoutMap.Values.GroupBy(x => x.Depth).OrderBy(g => g.Key);
-                foreach (var group in byDepth)
+                levelY[d] = runningY;
+                double ch = depthMaxHeights.TryGetValue(d, out var h) ? h : BoxHeight;
+                runningY += ch + LevelVerticalGap;
+            }
+
+            Dictionary<int, (double MinX, double MaxX)> GetDepthProfileX(List<NodeLayoutInfo> nodes)
+            {
+                var profile = new Dictionary<int, (double MinX, double MaxX)>();
+                foreach (var n in nodes)
                 {
-                    var sorted = group.OrderBy(x => x.X).ToList();
-                    for (int i = 0; i < sorted.Count - 1; i++)
+                    double left = n.X;
+                    double right = n.X + n.Width;
+                    if (!profile.TryGetValue(n.Depth, out var span))
                     {
-                        var a = sorted[i];
-                        var b = sorted[i + 1];
-                        double requiredMinX = a.X + a.Width + MinHorizontalSpacing;
-                        if (b.X < requiredMinX)
+                        profile[n.Depth] = (left, right);
+                    }
+                    else
+                    {
+                        profile[n.Depth] = (Math.Min(span.MinX, left), Math.Max(span.MaxX, right));
+                    }
+                }
+                return profile;
+            }
+
+            double ComputeShiftX(Dictionary<int, (double MinX, double MaxX)> prevProfile, Dictionary<int, (double MinX, double MaxX)> currProfile)
+            {
+                double maxShift = 0;
+                foreach (var kvp in currProfile)
+                {
+                    int depth = kvp.Key;
+                    if (prevProfile.TryGetValue(depth, out var prevSpan))
+                    {
+                        double requiredX = prevSpan.MaxX + MinHorizontalSpacing;
+                        double overlap = requiredX - kvp.Value.MinX;
+                        if (overlap > maxShift)
                         {
-                            double shift = requiredMinX - b.X;
-                            ShiftSubtree(b.Node, shift, 0, layoutMap);
-                            adjusted = true;
+                            maxShift = overlap;
+                        }
+                    }
+                }
+                return maxShift;
+            }
+
+            void ShiftNodesX(List<NodeLayoutInfo> nodes, double deltaX)
+            {
+                if (Math.Abs(deltaX) < 0.0001) return;
+                foreach (var n in nodes)
+                {
+                    n.X += deltaX;
+                }
+            }
+
+            List<NodeLayoutInfo> LayoutSubtreeV(FolderNode node, int depth)
+            {
+                var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
+                var nodeInfo = new NodeLayoutInfo
+                {
+                    Node = node,
+                    Depth = depth,
+                    Width = w,
+                    Height = h,
+                    X = 0,
+                    Y = levelY.TryGetValue(depth, out double cy) ? cy : (ChartPadding + depth * (BoxHeight + LevelVerticalGap))
+                };
+                layoutMap[node] = nodeInfo;
+
+                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
+                    ? node.Children
+                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
+
+                var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
+
+                if (visibleChildren.Count == 0)
+                {
+                    return allSubtreeNodes;
+                }
+
+                var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
+                Dictionary<int, (double MinX, double MaxX)> cumulativeProfile = new();
+
+                foreach (var child in visibleChildren)
+                {
+                    var childSubtreeNodes = LayoutSubtreeV(child, depth + 1);
+                    var childProfile = GetDepthProfileX(childSubtreeNodes);
+
+                    if (cumulativeChildrenNodes.Count > 0)
+                    {
+                        double shift = ComputeShiftX(cumulativeProfile, childProfile);
+                        if (shift > 0)
+                        {
+                            ShiftNodesX(childSubtreeNodes, shift);
+                            childProfile = GetDepthProfileX(childSubtreeNodes);
+                        }
+                    }
+
+                    cumulativeChildrenNodes.AddRange(childSubtreeNodes);
+
+                    foreach (var kvp in childProfile)
+                    {
+                        if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
+                        {
+                            cumulativeProfile[kvp.Key] = kvp.Value;
+                        }
+                        else
+                        {
+                            cumulativeProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
                         }
                     }
                 }
 
-                // Re-center parents horizontally over visible children
-                foreach (var info in layoutMap.Values)
+                // Center parent horizontally over its first and last visible children
+                double firstChildCenter = layoutMap[visibleChildren[0]].CenterX;
+                double lastChildCenter = layoutMap[visibleChildren[^1]].CenterX;
+                double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
+                nodeInfo.X = desiredCenter - w / 2.0;
+
+                allSubtreeNodes.AddRange(cumulativeChildrenNodes);
+                return allSubtreeNodes;
+            }
+
+            var cumulativeRootNodes = new List<NodeLayoutInfo>();
+            Dictionary<int, (double MinX, double MaxX)> cumulativeRootProfile = new();
+
+            foreach (var root in roots)
+            {
+                var rootSubtreeNodes = LayoutSubtreeV(root, 0);
+                var rootProfile = GetDepthProfileX(rootSubtreeNodes);
+
+                if (cumulativeRootNodes.Count > 0)
                 {
-                    if (info.Node.IsExpanded && info.Node.Children.Count > 0)
+                    double shift = ComputeShiftX(cumulativeRootProfile, rootProfile);
+                    if (shift > 0)
                     {
-                        var children = info.Node.Children.Where(c => layoutMap.ContainsKey(c)).ToList();
-                        if (children.Count > 0)
-                        {
-                            double firstCenterX = layoutMap[children[0]].CenterX;
-                            double lastCenterX = layoutMap[children[^1]].CenterX;
-                            double desiredCenterX = (firstCenterX + lastCenterX) / 2.0;
-                            double desiredX = desiredCenterX - info.Width / 2.0;
-                            if (Math.Abs(desiredX - info.X) > 0.01)
-                            {
-                                info.X = desiredX;
-                                adjusted = true;
-                            }
-                        }
+                        ShiftNodesX(rootSubtreeNodes, shift);
+                        rootProfile = GetDepthProfileX(rootSubtreeNodes);
+                    }
+                }
+
+                cumulativeRootNodes.AddRange(rootSubtreeNodes);
+
+                foreach (var kvp in rootProfile)
+                {
+                    if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
+                    {
+                        cumulativeRootProfile[kvp.Key] = kvp.Value;
+                    }
+                    else
+                    {
+                        cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
                     }
                 }
             }
@@ -774,7 +952,7 @@ public partial class OrgChartView : UserControl
             {
                 double minX = layoutMap.Values.Min(i => i.X);
                 double offsetX = ChartPadding - minX;
-                if (Math.Abs(offsetX) > 0.01)
+                if (Math.Abs(offsetX) > 0.001)
                 {
                     foreach (var info in layoutMap.Values)
                         info.X += offsetX;
@@ -955,11 +1133,7 @@ public partial class OrgChartView : UserControl
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(
-                    8,
-                    0,
-                    (node.Children.Count > 0 && !isVertical ? 16 : 8),
-                    (node.Children.Count > 0 && isVertical ? 8 : 0))
+                Margin = new Thickness(8, 0, 8, 0)
             };
 
             if (isSelected)
