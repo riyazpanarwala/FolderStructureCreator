@@ -266,9 +266,9 @@
                     </StackPanel>
 
                     <!-- Pinned Folders Section -->
-                    <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{DynamicResource BrushBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}" PreviewMouseWheel="PinnedFolders_PreviewMouseWheel">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,4">
+                    <Border DockPanel.Dock="Top" Margin="0,0,0,10" Background="{DynamicResource BrushBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6,8,2" Visibility="{Binding HasPinnedFolders, Converter={StaticResource BoolToVis}}" PreviewMouseWheel="PinnedFolders_PreviewMouseWheel">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -279,12 +279,41 @@
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Quick Access" Style="{StaticResource SubText}" FontSize="10.5"/>
                             </Grid>
+
+                            <!-- Bottom Resize Handle -->
+                            <Thumb DockPanel.Dock="Bottom"
+                                   Cursor="SizeNS"
+                                   Height="10"
+                                   Margin="0,4,0,0"
+                                   DragDelta="PinnedFoldersResizeThumb_DragDelta"
+                                   MouseDoubleClick="PinnedFoldersResizeThumb_MouseDoubleClick"
+                                   ToolTip="Drag to expand or shrink pinned folders height (Double-click to toggle)">
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="{x:Type Thumb}">
+                                        <Border Background="Transparent" Height="10" VerticalAlignment="Center">
+                                            <Border Width="36" Height="3.5" Background="{DynamicResource BrushBorder}" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Center" x:Name="GripIndicator"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="GripIndicator" Property="Background" Value="{DynamicResource BrushAccent}"/>
+                                                <Setter TargetName="GripIndicator" Property="Height" Value="4.5"/>
+                                            </Trigger>
+                                            <Trigger Property="IsDragging" Value="True">
+                                                <Setter TargetName="GripIndicator" Property="Background" Value="{DynamicResource BrushAccent}"/>
+                                                <Setter TargetName="GripIndicator" Property="Height" Value="4.5"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+
                             <TreeView x:Name="PinnedFoldersTreeView"
                                       ItemsSource="{Binding PinnedFolders}"
                                       SelectedItemChanged="PinnedFoldersTreeView_SelectedItemChanged"
-                                      MaxHeight="160"
+                                      Height="160"
+                                      MinHeight="60"
                                       ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                       ScrollViewer.CanContentScroll="False">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
@@ -394,11 +423,13 @@
                                     </HierarchicalDataTemplate>
                                 </TreeView.Resources>
                             </TreeView>
-                        </StackPanel>
+                        </DockPanel>
                     </Border>
 
                     <!-- Drive TreeView -->
-                    <TreeView x:Name="DirectoryTreeView" ItemsSource="{Binding Drives}" SelectedItemChanged="DirectoryTreeView_SelectedItemChanged">
+                    <TreeView x:Name="DirectoryTreeView" ItemsSource="{Binding Drives}" SelectedItemChanged="DirectoryTreeView_SelectedItemChanged"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -433,7 +464,7 @@
                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1">
                                     <Path Data="{StaticResource FolderGeometry}" Style="{StaticResource FolderIcon}"/>
-                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}">
+                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}" ToolTip="{Binding Name}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Style.Triggers>
@@ -865,7 +896,9 @@
                     <!-- Plan Visualization / Content Grid -->
                     <Grid>
                         <!-- Editable TreeView -->
-                        <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}" SelectedItemChanged="StructureTreeView_SelectedItemChanged" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}" AllowDrop="True" PreviewMouseLeftButtonDown="StructureTreeView_PreviewMouseLeftButtonDown" PreviewMouseMove="StructureTreeView_PreviewMouseMove" DragOver="StructureTreeView_DragOver" Drop="StructureTreeView_Drop">
+                        <TreeView x:Name="StructureTreeView" ItemsSource="{Binding RootFolders}" SelectedItemChanged="StructureTreeView_SelectedItemChanged" Visibility="{Binding IsOrgChartView, Converter={StaticResource InverseBoolToVis}}" AllowDrop="True" PreviewMouseLeftButtonDown="StructureTreeView_PreviewMouseLeftButtonDown" PreviewMouseMove="StructureTreeView_PreviewMouseMove" DragOver="StructureTreeView_DragOver" Drop="StructureTreeView_Drop"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -929,7 +962,7 @@
                                             </Border.Style>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <Path Data="{StaticResource FolderGeometry}" Style="{StaticResource FolderIcon}"/>
-                                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource BrushTextPrimary}" FontSize="12.5" VerticalAlignment="Center" MouseDown="StructureNodeText_MouseDown">
+                                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource BrushTextPrimary}" FontSize="12.5" VerticalAlignment="Center" MouseDown="StructureNodeText_MouseDown" ToolTip="{Binding Name}">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Style.Triggers>

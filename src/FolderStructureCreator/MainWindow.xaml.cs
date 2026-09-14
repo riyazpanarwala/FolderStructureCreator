@@ -135,6 +135,28 @@ public partial class MainWindow : Window
         }
     }
 
+    private void PinnedFoldersResizeThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        double currentHeight = double.IsNaN(PinnedFoldersTreeView.Height)
+            ? PinnedFoldersTreeView.ActualHeight
+            : PinnedFoldersTreeView.Height;
+
+        if (currentHeight <= 0) currentHeight = 160;
+
+        double newHeight = Math.Clamp(currentHeight + e.VerticalChange, 50, 700);
+        PinnedFoldersTreeView.Height = newHeight;
+    }
+
+    private void PinnedFoldersResizeThumb_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        double currentHeight = double.IsNaN(PinnedFoldersTreeView.Height)
+            ? PinnedFoldersTreeView.ActualHeight
+            : PinnedFoldersTreeView.Height;
+
+        // Toggle between default compact (160) and expanded (320)
+        PinnedFoldersTreeView.Height = currentHeight > 200 ? 160 : 320;
+    }
+
     // TreeView.SelectedItem is read-only, so we bridge it into the view model here.
     private void DirectoryTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {

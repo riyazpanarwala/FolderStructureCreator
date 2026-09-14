@@ -13,9 +13,11 @@ public class MainViewModel : ViewModelBase
 {
     /// <summary>At this width, the destination browser and chart have comfortable space side by side.</summary>
     public const double SideBySideOrgChartWidth = 1500;
-    // A chart creates one WPF control per folder. Keep this deliberately lower than the
-    // general import limit so folders such as AppData remain useful without slowing the UI.
-    private const int MaxOrgChartNodes = 750;
+    /// <summary>Maximum number of folders opened/expanded on initial chart load.</summary>
+    public const int InitialMaxOpenedFolders = 200;
+    // A chart creates one WPF control per folder. Keep this high enough to support deep project charts,
+    // while initial expansion is capped at InitialMaxOpenedFolders for crisp responsiveness.
+    private const int MaxOrgChartNodes = 2500;
     // ---- Left pane: live Windows directory browser ----
     public ObservableCollection<FileSystemNode> Drives { get; } = new();
 
@@ -249,6 +251,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private bool _hasChartBeenOpenedForCurrentPlan;
     private bool _isOrgChartView;
     /// <summary>False = editable TreeView, True = the read-visual org-chart diagram (auto-enabled after an import).</summary>
     public bool IsOrgChartView
@@ -256,6 +259,12 @@ public class MainViewModel : ViewModelBase
         get => _isOrgChartView;
         set
         {
+            if (value && !_hasChartBeenOpenedForCurrentPlan)
+            {
+                LimitInitialExpansion(RootFolders, InitialMaxOpenedFolders);
+                _hasChartBeenOpenedForCurrentPlan = true;
+            }
+
             if (SetField(ref _isOrgChartView, value))
                 OnPropertyChanged(nameof(ShouldShowDestinationSidebarToggle));
         }
@@ -907,6 +916,8 @@ public class MainViewModel : ViewModelBase
             void ApplyResult()
             {
                 RootFolders.Clear();
+                LimitInitialExpansion(new[] { importResult.Root }, InitialMaxOpenedFolders);
+                _hasChartBeenOpenedForCurrentPlan = true;
                 RootFolders.Add(importResult.Root);
                 SelectedStructureNode = importResult.Root;
                 TargetPath = folderPath;
@@ -914,9 +925,12 @@ public class MainViewModel : ViewModelBase
                 IsLiveSyncMode = true;
 
                 string ignoreText = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
+                string limitNote = importResult.FolderCount > InitialMaxOpenedFolders
+                    ? $" (first {InitialMaxOpenedFolders} folders opened; use 'Expand all' or click any badge to view more)"
+                    : "";
                 StatusMessage = importResult.Truncated
-                    ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}. Live computer sync enabled."
-                    : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText} in the org chart. Live computer sync enabled.";
+                    ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}{limitNote}. Live computer sync enabled."
+                    : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}{limitNote} in the org chart. Live computer sync enabled.";
 
                 OnPropertyChanged(nameof(TotalFolderCount));
                 RaiseStructureChanged();
@@ -1523,12 +1537,17 @@ public class MainViewModel : ViewModelBase
         {
             var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(sourcePath) : new IgnoreRuleService(includeBuiltInDefaults: false);
             var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(sourcePath, FileSystemService.MaxImportTotalNodes, ignoreRules));
+            LimitInitialExpansion(new[] { importResult.Root }, InitialMaxOpenedFolders);
+            _hasChartBeenOpenedForCurrentPlan = true;
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             IsOrgChartView = true; // an import reads best as the visual org-chart diagram
 
             string ignoreInfo = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
-            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}. ";
+            string limitNote = importResult.FolderCount > InitialMaxOpenedFolders
+                ? $" (first {InitialMaxOpenedFolders} folders opened initially; click 'Expand all' to view all)"
+                : "";
+            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}{limitNote}. ";
 
             message += importResult.Truncated
                 ? $"Note: this folder is very large, so the import stopped early at a safety limit (~{FileSystemService.MaxImportTotalNodes} folders) to avoid freezing the app - not everything nested deep inside is shown."
@@ -1556,12 +1575,17 @@ public class MainViewModel : ViewModelBase
         {
             var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(folderPath) : new IgnoreRuleService(includeBuiltInDefaults: false);
             var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, FileSystemService.MaxImportTotalNodes, ignoreRules));
+            LimitInitialExpansion(new[] { importResult.Root }, InitialMaxOpenedFolders);
+            _hasChartBeenOpenedForCurrentPlan = true;
             RootFolders.Add(importResult.Root);
             SelectedStructureNode = importResult.Root;
             _lastImportIgnoredCount = importResult.IgnoredCount;
 
             string ignoreInfo = importResult.IgnoredCount > 0 ? $" ({importResult.IgnoredCount} skipped via ignore rules)" : "";
-            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}.";
+            string limitNote = importResult.FolderCount > InitialMaxOpenedFolders
+                ? $" (first {InitialMaxOpenedFolders} folders opened; use 'Expand all' or click any badge to view more)"
+                : "";
+            var message = $"Imported \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreInfo}{limitNote}.";
             if (importResult.Truncated)
             {
                 message += $" Note: very large folder, import capped at safety limit (~{FileSystemService.MaxImportTotalNodes} folders).";
@@ -1591,10 +1615,77 @@ public class MainViewModel : ViewModelBase
 
         RootFolders.Clear();
         SelectedStructureNode = null;
+        _hasChartBeenOpenedForCurrentPlan = false;
         _lastImportIgnoredCount = 0;
         StatusMessage = "Plan cleared. Add folders manually or import from an existing folder.";
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();
+    }
+
+    /// <summary>
+    /// Ensures that at most <paramref name="maxOpenedFolders"/> folders are opened/expanded on initial chart load.
+    /// Uses breadth-first expansion so the top-level hierarchy is immediately visible, while deeper branches
+    /// beyond the limit start collapsed with "+N" badges that the user can expand individually or via "Expand all".
+    /// </summary>
+    public static void LimitInitialExpansion(IEnumerable<FolderNode> roots, int maxOpenedFolders = InitialMaxOpenedFolders)
+    {
+        var rootList = roots.ToList();
+        if (rootList.Count == 0) return;
+
+        // Count total nodes across the entire tree
+        int totalNodes = 0;
+        void CountNodes(FolderNode node)
+        {
+            totalNodes++;
+            foreach (var child in node.Children)
+                CountNodes(child);
+        }
+        foreach (var r in rootList)
+            CountNodes(r);
+
+        // If total nodes across all trees is already within limit, keep everything expanded
+        if (totalNodes <= maxOpenedFolders)
+            return;
+
+        // Collapse all nodes first, then expand level by level (breadth-first) up to maxOpenedFolders
+        void CollapseAll(FolderNode node)
+        {
+            node.IsExpanded = false;
+            foreach (var child in node.Children)
+                CollapseAll(child);
+        }
+        foreach (var r in rootList)
+            CollapseAll(r);
+
+        int openedCount = rootList.Count;
+        var queue = new Queue<FolderNode>();
+
+        foreach (var r in rootList)
+        {
+            r.IsExpanded = true;
+            queue.Enqueue(r);
+        }
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (current.Children.Count == 0) continue;
+
+            if (openedCount + current.Children.Count <= maxOpenedFolders)
+            {
+                current.IsExpanded = true;
+                openedCount += current.Children.Count;
+                foreach (var child in current.Children)
+                {
+                    queue.Enqueue(child);
+                }
+            }
+            else
+            {
+                // Reached the limit: current folder remains collapsed so its children are not displayed initially
+                current.IsExpanded = false;
+            }
+        }
     }
 
     public void ExpandAllOrgChart()

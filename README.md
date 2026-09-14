@@ -67,8 +67,10 @@ Export your blueprint folder plan directly as a standalone executable script tha
 - When enabled, any addition, inline rename, node deletion (sent safely to Windows Recycle Bin), or drag-and-drop move immediately updates the actual physical folders on your hard drive in real time.
 
 ### 👁️ Two Blueprint Views
-- **Tree View** — Classic, clean indented list view with expandable/collapsible tree nodes.
+- **Tree View** — Classic, clean indented list view with expandable/collapsible tree nodes and automatic horizontal scrolling.
 - **Org Chart Diagram** — Interactive dendrogram diagram with depth-colored boxes and right-angle connector lines.
+  - **Auto-Wider Boxes for Long Names** — Folder node boxes dynamically adapt their width based on text length, ensuring that long folder names are completely visible directly without truncation or having to hover for tooltips. Standard and compact folders maintain their clean uniform baseline width.
+  - **Fast Initial Chart Load (Capped at 200 Folders)** — When opening or importing large folder structures, the chart automatically expands level-by-level up to the first 200 folders to keep rendering blazing fast and responsive. Deeper branches beyond 200 start collapsed with `+Count` badges that users can expand individually or all at once via the **Expand all** button (<kbd>Ctrl+Shift+E</kbd>).
   - **Enhanced Selection & Framing** — Selected nodes feature a distinct turquoise glow ring and selection bullet (`● `) while preserving original depth colors. Viewport framing is clamped to natural 100% zoom max so small structures aren't unnaturally blown up.
   - **Non-Destructive Navigation** — Blueprint node additions and edits preserve your current scroll/pan position without jumpy resets.
   - **Expand/Collapse Controls** — Compact 22px interactive badge buttons displaying subfolder count with hover transitions.
@@ -112,7 +114,9 @@ Export your blueprint folder plan directly as a standalone executable script tha
 ### 📁 Live Computer Directory Browser & Targets
 - **Lazy-Loaded Windows Drives Browser** — Browse drives, pinned folders, and real computer directories on the left sidebar. Nothing is loaded until expanded, ensuring maximum performance even on huge drives.
 - **Natural Folder Sorting & Sort Order Toggle** — Folder names are sorted naturally by number first (`1, 2, 3 ... 10, 11`), followed by alphabetical names (`A-Z`). Includes a **Sort: A-Z ⬇ / Sort: Z-A ⬆** toolbar toggle to dynamically switch between ascending and descending sort order across pinned folders and drive trees.
-- **Pinned Folders** — Pin frequently used folder locations for quick target selection. Features a 1-click **Chart** button to immediately visualize any pinned folder in the Org Chart diagram, and a **`...`** overflow menu to **Select as Destination**, **Open in Explorer**, or **Unpin Folder**.
+- **Pinned Folders** — Pin frequently used folder locations for quick target selection.
+  - **Mouse-Resizable Height** — Drag the bottom grip handle (`━`) with your mouse to smoothly expand or shrink the pinned panel height (from 50px to 700px), or double-click to toggle between compact (160px) and expanded (320px).
+  - Features a 1-click **Chart** button to immediately visualize any pinned folder in the Org Chart diagram, and a **`...`** overflow menu to **Select as Destination**, **Open in Explorer**, or **Unpin Folder**.
 - **One-Click Structure Creation** — Recursively creates every folder in your plan under the target directory path. Existing folders are preserved safely.
 - **Auto-Expansion** — After creation, the live browser automatically expands down to display all newly created folders.
 - **Windows Path Sanitization** — Automatically sanitizes invalid filename characters (`<>:"/\|?*`) and reserved names (`CON`, `PRN`, `AUX`, etc.).

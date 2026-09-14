@@ -484,10 +484,34 @@ public partial class OrgChartView : UserControl
         public double CenterY => Y + Height / 2.0;
     }
 
-    private static (double Width, double Height) GetNodeDimensions(FolderNode node, int depth)
+    private static readonly Typeface NodeTextTypeface = new Typeface(
+        new FontFamily("Segoe UI, system-ui, sans-serif"),
+        FontStyles.Normal,
+        FontWeights.Bold,
+        FontStretches.Normal);
+
+    private static double MeasureTextWidth(string text, double fontSize)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var formattedText = new FormattedText(
+            text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            NodeTextTypeface,
+            fontSize,
+            Brushes.Black,
+            1.0);
+        return formattedText.WidthIncludingTrailingWhitespace;
+    }
+
+    private static (double Width, double Height) GetNodeDimensions(FolderNode node, int depth, bool isVertical = false)
     {
         double height = node.HasDiffBadge ? 36.0 : BoxHeight;
-        return (BoxWidth, height);
+        double textWidth = MeasureTextWidth(node.Name, 12.0);
+        double extraPadding = (node.Children.Count > 0 && !isVertical) ? 48.0 : 38.0;
+        double requiredWidth = textWidth + extraPadding;
+        double width = Math.Max(BoxWidth, Math.Ceiling(requiredWidth));
+        return (width, height);
     }
 
     private static void ShiftSubtree(FolderNode node, double deltaX, double deltaY, Dictionary<FolderNode, NodeLayoutInfo> map)
@@ -517,18 +541,52 @@ public partial class OrgChartView : UserControl
         if (!isVertical)
         {
             // HORIZONTAL LAYOUT (Left to right dendrogram)
+            // Precompute column widths for each depth based on visible nodes
+            var depthMaxWidths = new Dictionary<int, double>();
+            void MeasureVisibleDepths(FolderNode node, int depth)
+            {
+                var (w, _) = GetNodeDimensions(node, depth, isVertical: false);
+                if (!depthMaxWidths.TryGetValue(depth, out double maxW) || w > maxW)
+                {
+                    depthMaxWidths[depth] = w;
+                }
+
+                if (node.IsExpanded && node.Children.Count > 0)
+                {
+                    foreach (var child in node.Children)
+                    {
+                        MeasureVisibleDepths(child, depth + 1);
+                    }
+                }
+            }
+
+            foreach (var root in roots)
+            {
+                MeasureVisibleDepths(root, 0);
+            }
+
+            int maxDepth = depthMaxWidths.Keys.Count > 0 ? depthMaxWidths.Keys.Max() : 0;
+            var colX = new Dictionary<int, double>();
+            double runningX = ChartPadding;
+            for (int d = 0; d <= maxDepth; d++)
+            {
+                colX[d] = runningX;
+                double cw = depthMaxWidths.TryGetValue(d, out var w) ? w : BoxWidth;
+                runningX += cw + ColumnGap;
+            }
+
             double currentY = ChartPadding;
 
             void LayoutNodeH(FolderNode node, int depth)
             {
-                var (w, h) = GetNodeDimensions(node, depth);
+                var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
                 var info = new NodeLayoutInfo
                 {
                     Node = node,
                     Depth = depth,
                     Width = w,
                     Height = h,
-                    X = ChartPadding + depth * (BoxWidth + ColumnGap)
+                    X = colX.TryGetValue(depth, out double cx) ? cx : (ChartPadding + depth * (BoxWidth + ColumnGap))
                 };
                 layoutMap[node] = info;
 
@@ -626,7 +684,7 @@ public partial class OrgChartView : UserControl
 
             void LayoutNodeV(FolderNode node, int depth)
             {
-                var (w, h) = GetNodeDimensions(node, depth);
+                var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
                 var info = new NodeLayoutInfo
                 {
                     Node = node,
@@ -1314,7 +1372,7 @@ public partial class OrgChartView : UserControl
         int depth = 0;
         var p = _draggedNode.Parent;
         while (p != null) { depth++; p = p.Parent; }
-        var (gw, gh) = GetNodeDimensions(_draggedNode, depth);
+        var (gw, gh) = GetNodeDimensions(_draggedNode, depth, LayoutDirection == OrgChartLayoutDirection.Vertical);
 
         if (_dragGhostBorder == null)
         {
