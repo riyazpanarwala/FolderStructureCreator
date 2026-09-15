@@ -48,9 +48,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.Escape && ViewModel.IsFullscreenMode)
+        if (e.Key == Key.Escape)
         {
-            if (!ViewModel.IsCommandPaletteOpen && !ViewModel.IsSearchDropdownOpen)
+            if (ViewModel.IsMetricsDashboardOpen)
+            {
+                ViewModel.IsMetricsDashboardOpen = false;
+                e.Handled = true;
+                return;
+            }
+
+            if (ViewModel.IsFullscreenMode && !ViewModel.IsCommandPaletteOpen && !ViewModel.IsSearchDropdownOpen)
             {
                 ToggleFullscreenWindow();
                 e.Handled = true;
@@ -541,6 +548,14 @@ public partial class MainWindow : Window
         if (e.OriginalSource == CommandPaletteOverlay)
         {
             ViewModel.IsCommandPaletteOpen = false;
+        }
+    }
+
+    private void MetricsDashboardOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource == MetricsDashboardOverlay)
+        {
+            ViewModel.IsMetricsDashboardOpen = false;
         }
     }
 

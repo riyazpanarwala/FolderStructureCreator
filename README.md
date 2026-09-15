@@ -30,6 +30,18 @@ A feature-rich Windows desktop application built with .NET 8 WPF. Easily browse 
   - 🟠 **`[⚡ EXTRA]`** — Exists on **disk**, but is **NOT** in your Blueprint (Amber/Orange).
 - **Incremental Creation** — Click **`🟢 Create Missing Only`** to create missing blueprint folders on disk without modifying or overwriting existing files.
 
+### 📊 Blueprint Architecture Metrics & Health Dashboard (`Ctrl + M`)
+- **Real-Time Architecture Analytics** — Instant architectural diagnostics covering total planned folders, maximum nesting depth, and average branching factor.
+- **Structural Depth Distribution Chart** — Visual bar chart illustrating folder distribution across hierarchy depth levels (Level 1, 2, 3, etc.).
+- **Top Heaviest Branches** — Identifies top subtrees holding the highest concentration of subfolders.
+- **Windows Path Safety & Hygiene Audit** — Automatically audits blueprints before creating folders on disk:
+  - **MAX_PATH Check** — Flags paths exceeding or approaching the Windows 260-character limit.
+  - **Reserved System Names** — Detects illegal Windows device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`).
+  - **Case Collision Detection** — Detects sibling folders that differ only by case (e.g., `test` vs `Test`), which collide on Windows NTFS.
+  - **Trailing Characters** — Flags trailing spaces or periods that lock Windows Explorer.
+  - **Naming Convention Consistency** — Detects dominant team naming style (`kebab-case`, `PascalCase`, `camelCase`, `snake_case`).
+- **Quick Keyboard & Menu Access** — Press `Ctrl + M`, click the `Metrics` toolbar button, or launch via the Spotlight Command Palette (`Ctrl + K`).
+
 ### 🚦 Dynamic 3-Step Workflow Readiness Stepper
 - **Live Readiness Indicators** — Clear header stepper indicators that guide the creation process:
   - **`1. Plan`** — Shows live count of planned folders (`✓ Plan (N)`), or indicates when a blueprint draft needs to be created.
@@ -147,6 +159,7 @@ src/FolderStructureCreator/
     PinnedFolder.cs               Pinned quick-access folder model
     CommandItem.cs                Spotlight Command Palette item model
     NodeDiffStatus.cs             Diff status enum (MissingOnDisk, MatchesDisk, ExtraOnDisk)
+    BlueprintMetrics.cs           Metrics model (KPIs, depth tiers, heaviest subtrees, safety issues)
   Themes/
     DarkTheme.xaml                Dark teal-slate color palette dictionary
     LightTheme.xaml               Light crisp-white color palette dictionary
@@ -154,6 +167,7 @@ src/FolderStructureCreator/
   Views/
     OrgChartView.xaml(.cs)        Custom canvas-drawn interactive org-chart diagram (dendrogram renderer)
   Services/
+    BlueprintMetricsService.cs    Architecture analytics, MAX_PATH, and Windows safety linter engine
     ThemeService.cs               Theme manager, OS registry theme detection & settings persistence
     DirectoryDiffService.cs       Recursive disk vs. blueprint comparison engine
     FileSystemService.cs          Bounded directory scanning, sanitization, disk creation & Recycle Bin operations

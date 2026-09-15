@@ -635,7 +635,42 @@ public class MainViewModel : ViewModelBase
         IsCommandPaletteOpen = true;
     }
 
+    // ---- Blueprint Metrics Dashboard (Ctrl + M) ----
+    private bool _isMetricsDashboardOpen;
+    public bool IsMetricsDashboardOpen
+    {
+        get => _isMetricsDashboardOpen;
+        set
+        {
+            if (SetField(ref _isMetricsDashboardOpen, value) && value)
+            {
+                RefreshMetrics();
+            }
+        }
+    }
+
+    private BlueprintMetrics? _currentMetrics;
+    public BlueprintMetrics? CurrentMetrics
+    {
+        get => _currentMetrics;
+        set => SetField(ref _currentMetrics, value);
+    }
+
+    public void OpenMetricsDashboard()
+    {
+        RefreshMetrics();
+        IsMetricsDashboardOpen = true;
+    }
+
+    public void RefreshMetrics()
+    {
+        CurrentMetrics = BlueprintMetricsService.CalculateMetrics(RootFolders, TargetPath);
+    }
+
     // ---- Commands ----
+    public RelayCommand OpenMetricsDashboardCommand { get; }
+    public RelayCommand CloseMetricsDashboardCommand { get; }
+    public RelayCommand RefreshMetricsCommand { get; }
     public RelayCommand AddRootFolderCommand { get; }
     public RelayCommand AddChildFolderCommand { get; }
     public RelayCommand AddSiblingFolderCommand { get; }
@@ -778,6 +813,9 @@ public class MainViewModel : ViewModelBase
         OpenCommandPaletteCommand = new RelayCommand(_ => OpenCommandPalette());
         CloseCommandPaletteCommand = new RelayCommand(_ => IsCommandPaletteOpen = false);
         ExecuteCommandPaletteItemCommand = new RelayCommand(param => ExecuteCommandPaletteItem(param as CommandItem ?? SelectedCommandPaletteItem));
+        OpenMetricsDashboardCommand = new RelayCommand(_ => OpenMetricsDashboard());
+        CloseMetricsDashboardCommand = new RelayCommand(_ => IsMetricsDashboardOpen = false);
+        RefreshMetricsCommand = new RelayCommand(_ => RefreshMetrics());
         CompareBlueprintWithDiskCommand = new RelayCommand(_ => CompareBlueprintWithDisk(), _ => RootFolders.Count > 0 && !string.IsNullOrWhiteSpace(TargetPath));
         CreateMissingFoldersOnlyCommand = new RelayCommand(_ => CreateMissingFoldersOnly(), _ => IsDiffActive && HasMissingFolders);
         ClearDiffCommand = new RelayCommand(_ => ClearDiff(), _ => IsDiffActive);
@@ -805,6 +843,7 @@ public class MainViewModel : ViewModelBase
             ClearPlanCommand.RaiseCanExecuteChanged();
             CreateStructureCommand.RaiseCanExecuteChanged();
             if (HasSearchQuery) ApplySearch();
+            if (IsMetricsDashboardOpen) RefreshMetrics();
         };
     }
 
@@ -1859,6 +1898,10 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Toggle Drive Sort Order (A-Z / Z-A)", "Destination", "⇅", ToggleSortOrderCommand));
         AllCommands.Add(new CommandItem("Refresh Destination Drives", "Destination", "↻", RefreshDrivesCommand));
         AllCommands.Add(new CommandItem("Open Selected Folder in Explorer", "Destination", "↗", OpenSelectedFolderInExplorerCommand));
+
+        // Blueprint Architecture & Health Analysis
+        AllCommands.Add(new CommandItem("Blueprint Architecture Metrics & Health", "Analysis", "📊", OpenMetricsDashboardCommand, "Ctrl+M"));
+        AllCommands.Add(new CommandItem("Path Safety & MAX_PATH Audit", "Analysis", "🛡", OpenMetricsDashboardCommand, "Ctrl+M"));
 
         ApplyCommandPaletteFilter();
     }
