@@ -270,22 +270,88 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    private bool _isVerticalOrgChart;
-    /// <summary>False = Horizontal (Left-to-Right), True = Vertical (Top-to-Bottom) dendrogram layout.</summary>
-    public bool IsVerticalOrgChart
+    private OrgChartLayoutDirection _chartLayout = OrgChartLayoutDirection.Horizontal;
+    /// <summary>Diagram layout direction: Horizontal, Vertical, Mindmap, Radial, or Sunburst.</summary>
+    public OrgChartLayoutDirection ChartLayout
     {
-        get => _isVerticalOrgChart;
+        get => _chartLayout;
         set
         {
-            if (SetField(ref _isVerticalOrgChart, value))
+            if (SetField(ref _chartLayout, value))
             {
                 OnPropertyChanged(nameof(OrgChartLayoutButtonText));
+                OnPropertyChanged(nameof(IsHorizontalLayout));
+                OnPropertyChanged(nameof(IsVerticalLayout));
+                OnPropertyChanged(nameof(IsMindmapLayout));
+                OnPropertyChanged(nameof(IsRadialLayout));
+                OnPropertyChanged(nameof(IsSunburstLayout));
+                OnPropertyChanged(nameof(IsVerticalOrgChart));
                 RaiseStructureChanged();
             }
         }
     }
 
-    public string OrgChartLayoutButtonText => IsVerticalOrgChart ? "Vertical" : "Horizontal";
+    public bool IsVerticalOrgChart
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Vertical;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Vertical; }
+    }
+
+    public bool IsHorizontalLayout
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Horizontal;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Horizontal; }
+    }
+
+    public bool IsVerticalLayout
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Vertical;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Vertical; }
+    }
+
+    public bool IsMindmapLayout
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Mindmap;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Mindmap; }
+    }
+
+    public bool IsRadialLayout
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Radial;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Radial; }
+    }
+
+    public bool IsSunburstLayout
+    {
+        get => ChartLayout == OrgChartLayoutDirection.Sunburst;
+        set { if (value) ChartLayout = OrgChartLayoutDirection.Sunburst; }
+    }
+
+    public string OrgChartLayoutButtonText => ChartLayout switch
+    {
+        OrgChartLayoutDirection.Vertical => "Vertical",
+        OrgChartLayoutDirection.Mindmap => "Mindmap",
+        OrgChartLayoutDirection.Radial => "Radial",
+        OrgChartLayoutDirection.Sunburst => "Sunburst",
+        _ => "Horizontal"
+    };
+
+    public void SetOrgChartLayout(OrgChartLayoutDirection layout)
+    {
+        ChartLayout = layout;
+    }
+
+    public void CycleOrgChartLayout()
+    {
+        ChartLayout = ChartLayout switch
+        {
+            OrgChartLayoutDirection.Horizontal => OrgChartLayoutDirection.Vertical,
+            OrgChartLayoutDirection.Vertical => OrgChartLayoutDirection.Mindmap,
+            OrgChartLayoutDirection.Mindmap => OrgChartLayoutDirection.Radial,
+            OrgChartLayoutDirection.Radial => OrgChartLayoutDirection.Sunburst,
+            _ => OrgChartLayoutDirection.Horizontal
+        };
+    }
 
     private OrgChartConnectorStyle _connectorStyle = OrgChartConnectorStyle.Orthogonal;
     /// <summary>Connector line style: Orthogonal (right angles), Curved (smooth Bézier), or Straight (direct diagonal lines).</summary>
@@ -701,6 +767,7 @@ public class MainViewModel : ViewModelBase
     public RelayCommand SelectPinnedFolderCommand { get; }
     public RelayCommand ToggleSortOrderCommand { get; }
     public RelayCommand ToggleOrgChartLayoutCommand { get; }
+    public RelayCommand SetOrgChartLayoutCommand { get; }
     public RelayCommand CycleConnectorStyleCommand { get; }
     public RelayCommand SetConnectorStyleCommand { get; }
     public RelayCommand ExpandAllOrgChartCommand { get; }
@@ -753,7 +820,14 @@ public class MainViewModel : ViewModelBase
         ShowTreeViewCommand = new RelayCommand(_ => IsOrgChartView = false);
         ShowOrgChartViewCommand = new RelayCommand(_ => IsOrgChartView = true);
         ToggleDestinationSidebarCommand = new RelayCommand(_ => IsDestinationSidebarCollapsed = !IsDestinationSidebarCollapsed);
-        ToggleOrgChartLayoutCommand = new RelayCommand(_ => IsVerticalOrgChart = !IsVerticalOrgChart);
+        ToggleOrgChartLayoutCommand = new RelayCommand(_ => CycleOrgChartLayout());
+        SetOrgChartLayoutCommand = new RelayCommand(param =>
+        {
+            if (param is OrgChartLayoutDirection dir)
+                SetOrgChartLayout(dir);
+            else if (param is string str && Enum.TryParse<OrgChartLayoutDirection>(str, out var parsed))
+                SetOrgChartLayout(parsed);
+        });
         ExpandAllOrgChartCommand = new RelayCommand(_ => ExpandAllOrgChart(), _ => RootFolders.Count > 0);
         CollapseAllOrgChartCommand = new RelayCommand(_ => CollapseAllOrgChart(), _ => RootFolders.Count > 0);
         ExpandAllTreeCommand = new RelayCommand(_ => ExpandAllTree(), _ => RootFolders.Count > 0);
@@ -1872,8 +1946,12 @@ public class MainViewModel : ViewModelBase
         // Views & Layout
         AllCommands.Add(new CommandItem("Toggle Fullscreen Meeting Mode", "Presentation", "⛶", ToggleFullscreenCommand, "F11"));
         AllCommands.Add(new CommandItem("Switch to Tree View", "View Mode", "≡", ShowTreeViewCommand));
-        AllCommands.Add(new CommandItem("Switch to Org Chart View", "View Mode", "☵", ShowOrgChartViewCommand));
-        AllCommands.Add(new CommandItem("Toggle Chart Layout (Horizontal / Vertical)", "Org Chart", "⇄", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Cycle Diagram Layout", "Org Chart", "⇄", ToggleOrgChartLayoutCommand));
+        AllCommands.Add(new CommandItem("Diagram Layout: Horizontal (Left-to-Right)", "Org Chart", "⇄", SetOrgChartLayoutCommand, commandParameter: OrgChartLayoutDirection.Horizontal));
+        AllCommands.Add(new CommandItem("Diagram Layout: Vertical (Top-to-Bottom)", "Org Chart", "⇅", SetOrgChartLayoutCommand, commandParameter: OrgChartLayoutDirection.Vertical));
+        AllCommands.Add(new CommandItem("Diagram Layout: Mindmap (Bilateral Tree)", "Org Chart", "☵", SetOrgChartLayoutCommand, commandParameter: OrgChartLayoutDirection.Mindmap));
+        AllCommands.Add(new CommandItem("Diagram Layout: Radial (360° Circular Tree)", "Org Chart", "⭕", SetOrgChartLayoutCommand, commandParameter: OrgChartLayoutDirection.Radial));
+        AllCommands.Add(new CommandItem("Diagram Layout: Sunburst (Partition Rings)", "Org Chart", "☀️", SetOrgChartLayoutCommand, commandParameter: OrgChartLayoutDirection.Sunburst));
         AllCommands.Add(new CommandItem("Cycle Connector Line Style (Orthogonal / Curved / Straight)", "Org Chart", "⤹", CycleConnectorStyleCommand));
         AllCommands.Add(new CommandItem("Connector Style: Orthogonal (Right-Angles)", "Org Chart", "⌐", SetConnectorStyleCommand, commandParameter: OrgChartConnectorStyle.Orthogonal));
         AllCommands.Add(new CommandItem("Connector Style: Curved (Smooth Bézier)", "Org Chart", "∿", SetConnectorStyleCommand, commandParameter: OrgChartConnectorStyle.Curved));

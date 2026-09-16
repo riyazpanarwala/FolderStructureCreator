@@ -21,6 +21,23 @@
         <KeyBinding Key="M" Modifiers="Ctrl" Command="{Binding OpenMetricsDashboardCommand}"/>
     </Window.InputBindings>
     <Window.Resources>
+        <ContextMenu x:Key="LayoutMenu" x:Shared="False" DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="Horizontal Tree" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Horizontal}" IsCheckable="True" IsChecked="{Binding IsHorizontalLayout, Mode=OneWay}">
+                <MenuItem.Icon><Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Vertical Tree" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Vertical}" IsCheckable="True" IsChecked="{Binding IsVerticalLayout, Mode=OneWay}">
+                <MenuItem.Icon><Path Data="{StaticResource TreeGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Mindmap (Bilateral Balance)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Mindmap}" IsCheckable="True" IsChecked="{Binding IsMindmapLayout, Mode=OneWay}">
+                <MenuItem.Icon><Path Data="{StaticResource MindmapGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Radial (360° Orbit)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Radial}" IsCheckable="True" IsChecked="{Binding IsRadialLayout, Mode=OneWay}">
+                <MenuItem.Icon><Path Data="{StaticResource RadialGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Sunburst (Concentric Rings)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Sunburst}" IsCheckable="True" IsChecked="{Binding IsSunburstLayout, Mode=OneWay}">
+                <MenuItem.Icon><Path Data="{StaticResource SunburstGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
+            </MenuItem>
+        </ContextMenu>
         <ContextMenu x:Key="ConnectorMenu" x:Shared="False" DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
             <MenuItem Header="Right-angle" Command="{Binding SetConnectorStyleCommand}" CommandParameter="{x:Static views:OrgChartConnectorStyle.Orthogonal}" IsCheckable="True" IsChecked="{Binding IsOrthogonalConnector, Mode=OneWay}">
                 <MenuItem.Icon><Path Data="{StaticResource ConnectorLineGeometry}" Style="{StaticResource NavIcon}"/></MenuItem.Icon>
@@ -795,10 +812,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Double-click to open in Explorer · Drag to move · Drag canvas to pan" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource BrushTextSecondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle chart layout direction (Horizontal / Vertical)" Margin="0,0,4,0" Padding="8,4">
+                                    <Button Style="{StaticResource ToolButton}" Click="SettingsButton_Click" ContextMenu="{StaticResource LayoutMenu}" ToolTip="Choose diagram layout (Horizontal, Vertical, Mindmap, Radial, Sunburst)" Margin="0,0,4,0" Padding="8,4">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}" Width="11" Height="11" Margin="0,0,4,0"/>
                                             <TextBlock Text="{Binding OrgChartLayoutButtonText}" FontSize="11.5"/>
+                                            <Path Data="{StaticResource ChevronDownGeometry}" Style="{StaticResource NavIcon}" Width="9" Height="9" Margin="6,0,0,0"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Connector Style Selector Button -->
@@ -834,6 +852,17 @@
                                         <Path Data="{StaticResource MoreGeometry}" Style="{StaticResource NavIconFilled}" Width="12" Height="12"/>
                                         <Button.ContextMenu>
                                             <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="Diagram Layout">
+                                                    <MenuItem.Icon>
+                                                        <Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}"/>
+                                                    </MenuItem.Icon>
+                                                    <MenuItem Header="Horizontal Tree" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Horizontal}" IsCheckable="True" IsChecked="{Binding IsHorizontalLayout, Mode=OneWay}"/>
+                                                    <MenuItem Header="Vertical Tree" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Vertical}" IsCheckable="True" IsChecked="{Binding IsVerticalLayout, Mode=OneWay}"/>
+                                                    <MenuItem Header="Mindmap (Bilateral)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Mindmap}" IsCheckable="True" IsChecked="{Binding IsMindmapLayout, Mode=OneWay}"/>
+                                                    <MenuItem Header="Radial (360° Orbit)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Radial}" IsCheckable="True" IsChecked="{Binding IsRadialLayout, Mode=OneWay}"/>
+                                                    <MenuItem Header="Sunburst (Rings)" Command="{Binding SetOrgChartLayoutCommand}" CommandParameter="{x:Static views:OrgChartLayoutDirection.Sunburst}" IsCheckable="True" IsChecked="{Binding IsSunburstLayout, Mode=OneWay}"/>
+                                                </MenuItem>
+                                                <Separator/>
                                                 <MenuItem Header="Fit Width (Fill Viewport)" Click="FitWidthOrgChart_Click">
                                                     <MenuItem.Icon>
                                                         <Path Data="{StaticResource FitGeometry}" Style="{StaticResource NavIcon}"/>
@@ -1004,7 +1033,7 @@
                         </TreeView>
 
                         <!-- Visual Interactive Org Chart -->
-                        <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding IsVerticalOrgChart, Converter={StaticResource BoolToLayoutDirection}}" ConnectorStyle="{Binding ConnectorStyle}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
+                        <views:OrgChartView x:Name="OrgChartHost" LayoutDirection="{Binding ChartLayout, Mode=TwoWay}" ConnectorStyle="{Binding ConnectorStyle}" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}"/>
 
                         <!-- Restrained Clean Empty State Prompt -->
                         <Border Background="{DynamicResource BrushPanel}" Visibility="{Binding HasStructureNodes, Converter={StaticResource InverseBoolToVis}}">
@@ -1051,10 +1080,11 @@
                                     <TextBlock Text="● Live sync · edits affect disk" Foreground="{DynamicResource BrushWarning}" FontSize="13" FontWeight="SemiBold"/>
                                 </Border>
                                 <StackPanel Orientation="Horizontal" Visibility="{Binding IsOrgChartView, Converter={StaticResource BoolToVis}}">
-                                    <Button Style="{StaticResource ToolButton}" Command="{Binding ToggleOrgChartLayoutCommand}" ToolTip="Toggle chart layout (Horizontal / Vertical)" Padding="10,6" MinHeight="32" Margin="0,0,3,0">
+                                    <Button Style="{StaticResource ToolButton}" Click="SettingsButton_Click" ContextMenu="{StaticResource LayoutMenu}" ToolTip="Choose diagram layout" Padding="10,6" MinHeight="32" Margin="0,0,3,0">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}" Width="11" Height="11" Margin="0,0,4,0"/>
                                             <TextBlock Text="{Binding OrgChartLayoutButtonText}" FontSize="13"/>
+                                            <Path Data="{StaticResource ChevronDownGeometry}" Style="{StaticResource NavIcon}" Width="9" Height="9" Margin="6,0,0,0"/>
                                         </StackPanel>
                                     </Button>
                                     <Button Style="{StaticResource ToolButton}" Click="SettingsButton_Click" ContextMenu="{StaticResource ConnectorMenu}" ToolTip="Choose connector style" AutomationProperties.Name="Connector style" Padding="10,6" MinHeight="32" Margin="0,0,3,0">

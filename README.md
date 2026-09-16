@@ -88,14 +88,19 @@ Export your blueprint folder plan directly as a standalone executable script tha
   - **Non-Destructive Navigation** — Blueprint node additions and edits preserve your current scroll/pan position without jumpy resets.
   - **Expand/Collapse Controls** — Compact 22px interactive badge buttons displaying subfolder count with hover transitions.
   - **📷 Diagram Export (PNG / SVG / PDF)** — Export the complete dendrogram diagram to high-resolution PNG images, SVG vector graphics, or PDF vector documents with full depth coloring and connector lines.
-  - **Layout Direction Toggle** — Dynamically switch diagram orientation between **Horizontal (Left-to-Right ➡️)** and **Vertical (Top-to-Bottom ⬇️)** dendrogram views via the toolbar toggle button.
+  - **5 Diagram Layout Modes** — Switch seamlessly between layout formats via the diagram sub-toolbar button, context menu, or Spotlight Command Palette (<kbd>Ctrl+K</kbd>):
+    - **Horizontal (Left-to-Right ➡️)** — Classic dendrogram with dynamic column sizing, ideal for deep paths.
+    - **Vertical (Top-to-Bottom ⬇️)** — Traditional top-down organizational tree structure.
+    - **Mindmap (Bilateral Balance ☵)** — Central root hub with children dynamically distributed across mirrored left and right wings.
+    - **Radial (360° Circular Orbit ⭕)** — Concentric circular orbital layers distributing subtrees proportionally across a full 360° circle.
+    - **Sunburst (Multi-level Rings ☀️)** — Visual hierarchical partition disk with concentric annular sectors proportionally weighted by descendant folder count.
   - **🔀 Connector Line Styles** — Switch between 3 diagram connection styles via toolbar button, context menu, or Command Palette:
     - **Orthogonal** (classic right-angles) — Clean 90° engineering layout.
     - **Curved** (smooth Bézier splines) — Modern flowing S-curves like Miro, Figma, and MindMeister.
     - **Straight** (direct diagonal tree lines) — Point-to-point diagonal lines for compact trees.
-    *(Fully reflected in live canvas rendering, Fullscreen Meeting Mode, and PNG/SVG/PDF exports).*
+    *(Fully reflected across all layouts, live canvas rendering, Fullscreen Meeting Mode, and PNG/SVG/PDF exports).*
   - **Zooming & Panning** — Smooth zoom (Ctrl + Mouse Wheel or toolbar buttons from 10% to 400%, Reset zoom, and Fit-to-View) and canvas panning (Middle-click drag or Right-click canvas drag).
-  - **Double-Click to Open in Explorer** — Double-click any folder node in Tree View or box on the diagram canvas to open its physical location in Windows Explorer.
+  - **Double-Click to Open in Explorer** — Double-click any folder node in Tree View, box on the diagram canvas, or annular sector in Sunburst to open its physical location in Windows Explorer.
 
 ### 🖥️ Fullscreen Meeting Mode (`F11`)
 - **Distraction-Free Architecture Whiteboard** — Press **`F11`** (or click **`Fullscreen`** on the chart/tree toolbar or in Settings) to hide all toolbars, destination sidebars, and edit controls, transforming the app into an edge-to-edge interactive architecture whiteboard.

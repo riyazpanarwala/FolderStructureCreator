@@ -17,7 +17,10 @@ namespace FolderStructureCreator.Views;
 public enum OrgChartLayoutDirection
 {
     Horizontal,
-    Vertical
+    Vertical,
+    Mindmap,
+    Radial,
+    Sunburst
 }
 
 public enum OrgChartConnectorStyle
@@ -181,7 +184,7 @@ public partial class OrgChartView : UserControl
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
-    private Dictionary<Border, FolderNode> _boxMap = new();
+    private Dictionary<FrameworkElement, FolderNode> _boxMap = new();
     private FolderNode? _draggedNode;
     private Point _dragStartPoint;
     private bool _isDragging;
@@ -295,22 +298,34 @@ public partial class OrgChartView : UserControl
         void PerformScroll()
         {
             var selectedEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
-            if (selectedEntry.Key is not Border box) return;
+            if (selectedEntry.Key == null) return;
 
             double scale = ChartScale.ScaleX;
-            double left = Canvas.GetLeft(box) * scale;
-            double top = Canvas.GetTop(box) * scale;
-
-            double boxWidthScaled = (box.Width > 0 ? box.Width : BoxWidth) * scale;
-            double boxHeightScaled = (box.Height > 0 ? box.Height : BoxHeight) * scale;
+            Rect bounds;
+            if (selectedEntry.Key is Border box)
+            {
+                double left = Canvas.GetLeft(box);
+                double top = Canvas.GetTop(box);
+                double boxWidthScaled = (box.Width > 0 ? box.Width : BoxWidth);
+                double boxHeightScaled = (box.Height > 0 ? box.Height : BoxHeight);
+                bounds = new Rect(left, top, boxWidthScaled, boxHeightScaled);
+            }
+            else if (selectedEntry.Key is System.Windows.Shapes.Path path && path.Data != null)
+            {
+                bounds = path.Data.Bounds;
+            }
+            else
+            {
+                return;
+            }
 
             double viewportWidth = ChartScrollViewer.ViewportWidth;
             double viewportHeight = ChartScrollViewer.ViewportHeight;
 
             if (viewportWidth <= 0 || viewportHeight <= 0) return;
 
-            double targetX = left + (boxWidthScaled / 2.0) - (viewportWidth / 2.0);
-            double targetY = top + (boxHeightScaled / 2.0) - (viewportHeight / 2.0);
+            double targetX = (bounds.Left + bounds.Width / 2.0) * scale - (viewportWidth / 2.0);
+            double targetY = (bounds.Top + bounds.Height / 2.0) * scale - (viewportHeight / 2.0);
 
             ChartScrollViewer.ScrollToHorizontalOffset(Math.Max(0, targetX));
             ChartScrollViewer.ScrollToVerticalOffset(Math.Max(0, targetY));
@@ -485,6 +500,9 @@ public partial class OrgChartView : UserControl
         public double Y { get; set; }
         public double CenterX => X + Width / 2.0;
         public double CenterY => Y + Height / 2.0;
+        public bool IsLeftBranch { get; set; }
+        public double Angle { get; set; }
+        public double Radius { get; set; }
     }
 
     private static readonly Typeface NodeTextTypeface = new Typeface(
@@ -554,413 +572,1037 @@ public partial class OrgChartView : UserControl
         }
     }
 
-    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeLayout(IReadOnlyList<FolderNode> roots, bool isVertical)
+    private static (Dictionary<FolderNode, NodeLayoutInfo> Map, List<NodeLayoutInfo> AllNodes) LayoutHorizontalForest(
+        IReadOnlyList<FolderNode> branchRoots,
+        int baseDepth,
+        double startX)
+    {
+        var layoutMap = new Dictionary<FolderNode, NodeLayoutInfo>();
+        var allForestNodes = new List<NodeLayoutInfo>();
+        if (branchRoots.Count == 0) return (layoutMap, allForestNodes);
+
+        var depthMaxWidths = new Dictionary<int, double>();
+        void MeasureVisibleDepths(FolderNode node, int depth)
+        {
+            var (w, _) = GetNodeDimensions(node, depth, isVertical: false);
+            if (!depthMaxWidths.TryGetValue(depth, out double maxW) || w > maxW)
+            {
+                depthMaxWidths[depth] = w;
+            }
+
+            if (node.IsExpanded && node.Children.Count > 0)
+            {
+                foreach (var child in node.Children)
+                {
+                    MeasureVisibleDepths(child, depth + 1);
+                }
+            }
+        }
+
+        foreach (var root in branchRoots)
+        {
+            MeasureVisibleDepths(root, baseDepth);
+        }
+
+        int minD = depthMaxWidths.Keys.Count > 0 ? depthMaxWidths.Keys.Min() : baseDepth;
+        int maxD = depthMaxWidths.Keys.Count > 0 ? depthMaxWidths.Keys.Max() : baseDepth;
+        var colX = new Dictionary<int, double>();
+        double runningX = startX;
+        for (int d = minD; d <= maxD; d++)
+        {
+            colX[d] = runningX;
+            double cw = depthMaxWidths.TryGetValue(d, out var w) ? w : StandardParentBoxWidth;
+            runningX += cw + ColumnGap;
+        }
+
+        Dictionary<int, (double MinY, double MaxY)> GetDepthProfileY(List<NodeLayoutInfo> nodes)
+        {
+            var profile = new Dictionary<int, (double MinY, double MaxY)>();
+            foreach (var n in nodes)
+            {
+                double top = n.Y;
+                double bottom = n.Y + n.Height;
+                if (!profile.TryGetValue(n.Depth, out var span))
+                {
+                    profile[n.Depth] = (top, bottom);
+                }
+                else
+                {
+                    profile[n.Depth] = (Math.Min(span.MinY, top), Math.Max(span.MaxY, bottom));
+                }
+            }
+            return profile;
+        }
+
+        double ComputeShiftY(Dictionary<int, (double MinY, double MaxY)> prevProfile, Dictionary<int, (double MinY, double MaxY)> currProfile)
+        {
+            double maxShift = 0;
+            foreach (var kvp in currProfile)
+            {
+                int depth = kvp.Key;
+                if (prevProfile.TryGetValue(depth, out var prevSpan))
+                {
+                    double requiredY = prevSpan.MaxY + MinVerticalSpacing;
+                    double overlap = requiredY - kvp.Value.MinY;
+                    if (overlap > maxShift)
+                    {
+                        maxShift = overlap;
+                    }
+                }
+            }
+            return maxShift;
+        }
+
+        void ShiftNodesY(List<NodeLayoutInfo> nodes, double deltaY)
+        {
+            if (Math.Abs(deltaY) < 0.0001) return;
+            foreach (var n in nodes)
+            {
+                n.Y += deltaY;
+            }
+        }
+
+        List<NodeLayoutInfo> LayoutSubtreeH(FolderNode node, int depth)
+        {
+            var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
+            var nodeInfo = new NodeLayoutInfo
+            {
+                Node = node,
+                Depth = depth,
+                Width = w,
+                Height = h,
+                X = colX.TryGetValue(depth, out double cx) ? cx : (startX + (depth - baseDepth) * (StandardParentBoxWidth + ColumnGap)),
+                Y = 0
+            };
+            layoutMap[node] = nodeInfo;
+
+            var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
+                ? node.Children
+                : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
+
+            var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
+
+            if (visibleChildren.Count == 0)
+            {
+                return allSubtreeNodes;
+            }
+
+            var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
+            Dictionary<int, (double MinY, double MaxY)> cumulativeProfile = new();
+
+            foreach (var child in visibleChildren)
+            {
+                var childSubtreeNodes = LayoutSubtreeH(child, depth + 1);
+                var childProfile = GetDepthProfileY(childSubtreeNodes);
+
+                if (cumulativeChildrenNodes.Count > 0)
+                {
+                    double shift = ComputeShiftY(cumulativeProfile, childProfile);
+                    if (shift > 0)
+                    {
+                        ShiftNodesY(childSubtreeNodes, shift);
+                        childProfile = GetDepthProfileY(childSubtreeNodes);
+                    }
+                }
+
+                cumulativeChildrenNodes.AddRange(childSubtreeNodes);
+
+                foreach (var kvp in childProfile)
+                {
+                    if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
+                    {
+                        cumulativeProfile[kvp.Key] = kvp.Value;
+                    }
+                    else
+                    {
+                        cumulativeProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
+                    }
+                }
+            }
+
+            // Center parent over its first and last visible children
+            double firstChildCenter = layoutMap[visibleChildren[0]].CenterY;
+            double lastChildCenter = layoutMap[visibleChildren[^1]].CenterY;
+            double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
+            nodeInfo.Y = desiredCenter - h / 2.0;
+
+            allSubtreeNodes.AddRange(cumulativeChildrenNodes);
+            return allSubtreeNodes;
+        }
+
+        var cumulativeRootNodes = new List<NodeLayoutInfo>();
+        Dictionary<int, (double MinY, double MaxY)> cumulativeRootProfile = new();
+
+        foreach (var root in branchRoots)
+        {
+            var rootSubtreeNodes = LayoutSubtreeH(root, baseDepth);
+            var rootProfile = GetDepthProfileY(rootSubtreeNodes);
+
+            if (cumulativeRootNodes.Count > 0)
+            {
+                double shift = ComputeShiftY(cumulativeRootProfile, rootProfile);
+                if (shift > 0)
+                {
+                    ShiftNodesY(rootSubtreeNodes, shift);
+                    rootProfile = GetDepthProfileY(rootSubtreeNodes);
+                }
+            }
+
+            cumulativeRootNodes.AddRange(rootSubtreeNodes);
+
+            foreach (var kvp in rootProfile)
+            {
+                if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
+                {
+                    cumulativeRootProfile[kvp.Key] = kvp.Value;
+                }
+                else
+                {
+                    cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
+                }
+            }
+        }
+
+        allForestNodes.AddRange(cumulativeRootNodes);
+        return (layoutMap, allForestNodes);
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeHorizontalLayout(IReadOnlyList<FolderNode> roots)
+    {
+        var (layoutMap, _) = LayoutHorizontalForest(roots, baseDepth: 0, startX: ChartPadding);
+        if (layoutMap.Count > 0)
+        {
+            double minY = layoutMap.Values.Min(i => i.Y);
+            double offsetY = ChartPadding - minY;
+            if (Math.Abs(offsetY) > 0.001)
+            {
+                foreach (var info in layoutMap.Values)
+                    info.Y += offsetY;
+            }
+        }
+        return layoutMap;
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeVerticalLayout(IReadOnlyList<FolderNode> roots)
     {
         var layoutMap = new Dictionary<FolderNode, NodeLayoutInfo>();
         if (roots.Count == 0) return layoutMap;
 
-        if (!isVertical)
+        const double LevelVerticalGap = 44.0;
+        var depthMaxHeights = new Dictionary<int, double>();
+        void MeasureVisibleHeights(FolderNode node, int depth)
         {
-            // HORIZONTAL LAYOUT (Left to right dendrogram)
-            // Precompute column widths for each depth based on visible nodes
-            var depthMaxWidths = new Dictionary<int, double>();
-            void MeasureVisibleDepths(FolderNode node, int depth)
+            var (_, h) = GetNodeDimensions(node, depth, isVertical: true);
+            if (!depthMaxHeights.TryGetValue(depth, out double maxH) || h > maxH)
             {
-                var (w, _) = GetNodeDimensions(node, depth, isVertical: false);
-                if (!depthMaxWidths.TryGetValue(depth, out double maxW) || w > maxW)
-                {
-                    depthMaxWidths[depth] = w;
-                }
+                depthMaxHeights[depth] = h;
+            }
 
-                if (node.IsExpanded && node.Children.Count > 0)
+            if (node.IsExpanded && node.Children.Count > 0)
+            {
+                foreach (var child in node.Children)
                 {
-                    foreach (var child in node.Children)
+                    MeasureVisibleHeights(child, depth + 1);
+                }
+            }
+        }
+
+        foreach (var root in roots)
+        {
+            MeasureVisibleHeights(root, 0);
+        }
+
+        int maxDepthV = depthMaxHeights.Keys.Count > 0 ? depthMaxHeights.Keys.Max() : 0;
+        var levelY = new Dictionary<int, double>();
+        double runningY = ChartPadding;
+        for (int d = 0; d <= maxDepthV; d++)
+        {
+            levelY[d] = runningY;
+            double ch = depthMaxHeights.TryGetValue(d, out var h) ? h : BoxHeight;
+            runningY += ch + LevelVerticalGap;
+        }
+
+        Dictionary<int, (double MinX, double MaxX)> GetDepthProfileX(List<NodeLayoutInfo> nodes)
+        {
+            var profile = new Dictionary<int, (double MinX, double MaxX)>();
+            foreach (var n in nodes)
+            {
+                double left = n.X;
+                double right = n.X + n.Width;
+                if (!profile.TryGetValue(n.Depth, out var span))
+                {
+                    profile[n.Depth] = (left, right);
+                }
+                else
+                {
+                    profile[n.Depth] = (Math.Min(span.MinX, left), Math.Max(span.MaxX, right));
+                }
+            }
+            return profile;
+        }
+
+        double ComputeShiftX(Dictionary<int, (double MinX, double MaxX)> prevProfile, Dictionary<int, (double MinX, double MaxX)> currProfile)
+        {
+            double maxShift = 0;
+            foreach (var kvp in currProfile)
+            {
+                int depth = kvp.Key;
+                if (prevProfile.TryGetValue(depth, out var prevSpan))
+                {
+                    double requiredX = prevSpan.MaxX + MinHorizontalSpacing;
+                    double overlap = requiredX - kvp.Value.MinX;
+                    if (overlap > maxShift)
                     {
-                        MeasureVisibleDepths(child, depth + 1);
+                        maxShift = overlap;
                     }
                 }
             }
+            return maxShift;
+        }
 
-            foreach (var root in roots)
+        void ShiftNodesX(List<NodeLayoutInfo> nodes, double deltaX)
+        {
+            if (Math.Abs(deltaX) < 0.0001) return;
+            foreach (var n in nodes)
             {
-                MeasureVisibleDepths(root, 0);
+                n.X += deltaX;
             }
+        }
 
-            int maxDepth = depthMaxWidths.Keys.Count > 0 ? depthMaxWidths.Keys.Max() : 0;
-            var colX = new Dictionary<int, double>();
-            double runningX = ChartPadding;
-            for (int d = 0; d <= maxDepth; d++)
+        List<NodeLayoutInfo> LayoutSubtreeV(FolderNode node, int depth)
+        {
+            var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
+            var nodeInfo = new NodeLayoutInfo
             {
-                colX[d] = runningX;
-                double cw = depthMaxWidths.TryGetValue(d, out var w) ? w : StandardParentBoxWidth;
-                runningX += cw + ColumnGap;
-            }
+                Node = node,
+                Depth = depth,
+                Width = w,
+                Height = h,
+                X = 0,
+                Y = levelY.TryGetValue(depth, out double cy) ? cy : (ChartPadding + depth * (BoxHeight + LevelVerticalGap))
+            };
+            layoutMap[node] = nodeInfo;
 
-            // Subtree bottom-up collision-free layout:
-            // For each subtree, we record vertical spans at each depth level.
-            // When placing adjacent subtrees, we shift the subsequent subtree down so that
-            // at every depth level, it maintains at least MinVerticalSpacing below the preceding subtree.
-            // Parents are placed at the exact vertical midpoint of their visible children.
+            var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
+                ? node.Children
+                : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
 
-            Dictionary<int, (double MinY, double MaxY)> GetDepthProfileY(List<NodeLayoutInfo> nodes)
+            var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
+
+            if (visibleChildren.Count == 0)
             {
-                var profile = new Dictionary<int, (double MinY, double MaxY)>();
-                foreach (var n in nodes)
-                {
-                    double top = n.Y;
-                    double bottom = n.Y + n.Height;
-                    if (!profile.TryGetValue(n.Depth, out var span))
-                    {
-                        profile[n.Depth] = (top, bottom);
-                    }
-                    else
-                    {
-                        profile[n.Depth] = (Math.Min(span.MinY, top), Math.Max(span.MaxY, bottom));
-                    }
-                }
-                return profile;
-            }
-
-            double ComputeShiftY(Dictionary<int, (double MinY, double MaxY)> prevProfile, Dictionary<int, (double MinY, double MaxY)> currProfile)
-            {
-                double maxShift = 0;
-                foreach (var kvp in currProfile)
-                {
-                    int depth = kvp.Key;
-                    if (prevProfile.TryGetValue(depth, out var prevSpan))
-                    {
-                        double requiredY = prevSpan.MaxY + MinVerticalSpacing;
-                        double overlap = requiredY - kvp.Value.MinY;
-                        if (overlap > maxShift)
-                        {
-                            maxShift = overlap;
-                        }
-                    }
-                }
-                return maxShift;
-            }
-
-            void ShiftNodesY(List<NodeLayoutInfo> nodes, double deltaY)
-            {
-                if (Math.Abs(deltaY) < 0.0001) return;
-                foreach (var n in nodes)
-                {
-                    n.Y += deltaY;
-                }
-            }
-
-            List<NodeLayoutInfo> LayoutSubtreeH(FolderNode node, int depth)
-            {
-                var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
-                var nodeInfo = new NodeLayoutInfo
-                {
-                    Node = node,
-                    Depth = depth,
-                    Width = w,
-                    Height = h,
-                    X = colX.TryGetValue(depth, out double cx) ? cx : (ChartPadding + depth * (StandardParentBoxWidth + ColumnGap)),
-                    Y = 0
-                };
-                layoutMap[node] = nodeInfo;
-
-                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
-                    ? node.Children
-                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
-
-                var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
-
-                if (visibleChildren.Count == 0)
-                {
-                    return allSubtreeNodes;
-                }
-
-                var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
-                Dictionary<int, (double MinY, double MaxY)> cumulativeProfile = new();
-
-                foreach (var child in visibleChildren)
-                {
-                    var childSubtreeNodes = LayoutSubtreeH(child, depth + 1);
-                    var childProfile = GetDepthProfileY(childSubtreeNodes);
-
-                    if (cumulativeChildrenNodes.Count > 0)
-                    {
-                        double shift = ComputeShiftY(cumulativeProfile, childProfile);
-                        if (shift > 0)
-                        {
-                            ShiftNodesY(childSubtreeNodes, shift);
-                            childProfile = GetDepthProfileY(childSubtreeNodes);
-                        }
-                    }
-
-                    cumulativeChildrenNodes.AddRange(childSubtreeNodes);
-
-                    foreach (var kvp in childProfile)
-                    {
-                        if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
-                        {
-                            cumulativeProfile[kvp.Key] = kvp.Value;
-                        }
-                        else
-                        {
-                            cumulativeProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
-                        }
-                    }
-                }
-
-                // Center parent over its first and last visible children
-                double firstChildCenter = layoutMap[visibleChildren[0]].CenterY;
-                double lastChildCenter = layoutMap[visibleChildren[^1]].CenterY;
-                double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
-                nodeInfo.Y = desiredCenter - h / 2.0;
-
-                allSubtreeNodes.AddRange(cumulativeChildrenNodes);
                 return allSubtreeNodes;
             }
 
-            var cumulativeRootNodes = new List<NodeLayoutInfo>();
-            Dictionary<int, (double MinY, double MaxY)> cumulativeRootProfile = new();
+            var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
+            Dictionary<int, (double MinX, double MaxX)> cumulativeProfile = new();
 
-            foreach (var root in roots)
+            foreach (var child in visibleChildren)
             {
-                var rootSubtreeNodes = LayoutSubtreeH(root, 0);
-                var rootProfile = GetDepthProfileY(rootSubtreeNodes);
+                var childSubtreeNodes = LayoutSubtreeV(child, depth + 1);
+                var childProfile = GetDepthProfileX(childSubtreeNodes);
 
-                if (cumulativeRootNodes.Count > 0)
+                if (cumulativeChildrenNodes.Count > 0)
                 {
-                    double shift = ComputeShiftY(cumulativeRootProfile, rootProfile);
+                    double shift = ComputeShiftX(cumulativeProfile, childProfile);
                     if (shift > 0)
                     {
-                        ShiftNodesY(rootSubtreeNodes, shift);
-                        rootProfile = GetDepthProfileY(rootSubtreeNodes);
+                        ShiftNodesX(childSubtreeNodes, shift);
+                        childProfile = GetDepthProfileX(childSubtreeNodes);
                     }
                 }
 
-                cumulativeRootNodes.AddRange(rootSubtreeNodes);
+                cumulativeChildrenNodes.AddRange(childSubtreeNodes);
 
-                foreach (var kvp in rootProfile)
+                foreach (var kvp in childProfile)
                 {
-                    if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
+                    if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
                     {
-                        cumulativeRootProfile[kvp.Key] = kvp.Value;
+                        cumulativeProfile[kvp.Key] = kvp.Value;
                     }
                     else
                     {
-                        cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinY, kvp.Value.MinY), Math.Max(span.MaxY, kvp.Value.MaxY));
+                        cumulativeProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
                     }
                 }
             }
 
-            // Normalize so top-most node is anchored cleanly at ChartPadding
-            if (layoutMap.Count > 0)
+            // Center parent horizontally over its first and last visible children
+            double firstChildCenter = layoutMap[visibleChildren[0]].CenterX;
+            double lastChildCenter = layoutMap[visibleChildren[^1]].CenterX;
+            double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
+            nodeInfo.X = desiredCenter - w / 2.0;
+
+            allSubtreeNodes.AddRange(cumulativeChildrenNodes);
+            return allSubtreeNodes;
+        }
+
+        var cumulativeRootNodes = new List<NodeLayoutInfo>();
+        Dictionary<int, (double MinX, double MaxX)> cumulativeRootProfile = new();
+
+        foreach (var root in roots)
+        {
+            var rootSubtreeNodes = LayoutSubtreeV(root, 0);
+            var rootProfile = GetDepthProfileX(rootSubtreeNodes);
+
+            if (cumulativeRootNodes.Count > 0)
             {
-                double minY = layoutMap.Values.Min(i => i.Y);
-                double offsetY = ChartPadding - minY;
-                if (Math.Abs(offsetY) > 0.001)
+                double shift = ComputeShiftX(cumulativeRootProfile, rootProfile);
+                if (shift > 0)
                 {
-                    foreach (var info in layoutMap.Values)
-                        info.Y += offsetY;
+                    ShiftNodesX(rootSubtreeNodes, shift);
+                    rootProfile = GetDepthProfileX(rootSubtreeNodes);
+                }
+            }
+
+            cumulativeRootNodes.AddRange(rootSubtreeNodes);
+
+            foreach (var kvp in rootProfile)
+            {
+                if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
+                {
+                    cumulativeRootProfile[kvp.Key] = kvp.Value;
+                }
+                else
+                {
+                    cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
+                }
+            }
+        }
+
+        // Normalize so left-most node is anchored cleanly at ChartPadding
+        if (layoutMap.Count > 0)
+        {
+            double minX = layoutMap.Values.Min(i => i.X);
+            double offsetX = ChartPadding - minX;
+            if (Math.Abs(offsetX) > 0.001)
+            {
+                foreach (var info in layoutMap.Values)
+                    info.X += offsetX;
+            }
+        }
+
+        return layoutMap;
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeMindmapLayout(IReadOnlyList<FolderNode> roots)
+    {
+        var layoutMap = new Dictionary<FolderNode, NodeLayoutInfo>();
+        if (roots.Count == 0) return layoutMap;
+
+        double currentBaseY = 0;
+
+        foreach (var root in roots)
+        {
+            var (rw, rh) = GetNodeDimensions(root, 0, isVertical: false);
+            var rootInfo = new NodeLayoutInfo
+            {
+                Node = root,
+                Depth = 0,
+                Width = rw,
+                Height = rh,
+                X = -rw / 2.0,
+                Y = currentBaseY - rh / 2.0,
+                IsLeftBranch = false
+            };
+            layoutMap[root] = rootInfo;
+
+            var visibleChildren = (root.IsExpanded && root.Children.Count > 0)
+                ? root.Children
+                : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
+
+            if (visibleChildren.Count > 0)
+            {
+                // Balance children: right half and left half
+                int rightCount = (visibleChildren.Count + 1) / 2;
+                var rightChildren = visibleChildren.Take(rightCount).ToList();
+                var leftChildren = visibleChildren.Skip(rightCount).ToList();
+
+                List<NodeLayoutInfo> rightNodesList = new();
+                List<NodeLayoutInfo> leftNodesList = new();
+
+                if (rightChildren.Count > 0)
+                {
+                    double rightStartX = rw / 2.0 + ColumnGap;
+                    var (rMap, rList) = LayoutHorizontalForest(rightChildren, baseDepth: 1, startX: rightStartX);
+                    foreach (var kvp in rMap)
+                    {
+                        kvp.Value.IsLeftBranch = false;
+                        layoutMap[kvp.Key] = kvp.Value;
+                    }
+                    rightNodesList = rList;
+                }
+
+                if (leftChildren.Count > 0)
+                {
+                    double leftStartX = rw / 2.0 + ColumnGap;
+                    var (lMap, lList) = LayoutHorizontalForest(leftChildren, baseDepth: 1, startX: leftStartX);
+                    foreach (var kvp in lMap)
+                    {
+                        kvp.Value.IsLeftBranch = true;
+                        // Mirror horizontally to the left
+                        kvp.Value.X = -(kvp.Value.X + kvp.Value.Width);
+                        layoutMap[kvp.Key] = kvp.Value;
+                    }
+                    leftNodesList = lList;
+                }
+
+                // Center right side vertically around currentBaseY
+                if (rightNodesList.Count > 0)
+                {
+                    double rMinY = rightNodesList.Min(n => n.Y);
+                    double rMaxY = rightNodesList.Max(n => n.Y + n.Height);
+                    double rCenterY = (rMinY + rMaxY) / 2.0;
+                    double rShift = currentBaseY - rCenterY;
+                    foreach (var n in rightNodesList) n.Y += rShift;
+                }
+
+                // Center left side vertically around currentBaseY
+                if (leftNodesList.Count > 0)
+                {
+                    double lMinY = leftNodesList.Min(n => n.Y);
+                    double lMaxY = leftNodesList.Max(n => n.Y + n.Height);
+                    double lCenterY = (lMinY + lMaxY) / 2.0;
+                    double lShift = currentBaseY - lCenterY;
+                    foreach (var n in leftNodesList) n.Y += lShift;
+                }
+            }
+
+            // Advance currentBaseY for next root if any
+            double clusterMaxY = layoutMap.Values.Max(n => n.Y + n.Height);
+            currentBaseY = clusterMaxY + MinVerticalSpacing * 4;
+        }
+
+        // Normalize so all coordinates start from ChartPadding
+        double minX = layoutMap.Values.Min(i => i.X);
+        double minY = layoutMap.Values.Min(i => i.Y);
+        double shiftX = ChartPadding - minX;
+        double shiftY = ChartPadding - minY;
+        foreach (var info in layoutMap.Values)
+        {
+            info.X += shiftX;
+            info.Y += shiftY;
+        }
+
+        return layoutMap;
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeRadialLayout(IReadOnlyList<FolderNode> roots)
+    {
+        var layoutMap = new Dictionary<FolderNode, NodeLayoutInfo>();
+        if (roots.Count == 0) return layoutMap;
+
+        int GetSubtreeLeafCount(FolderNode node)
+        {
+            if (!node.IsExpanded || node.Children.Count == 0) return 1;
+            int count = 0;
+            foreach (var c in node.Children) count += GetSubtreeLeafCount(c);
+            return Math.Max(1, count);
+        }
+
+        const double LayerRadiusDelta = 175.0;
+
+        void LayoutRadialSubtree(FolderNode node, int depth, double startAngle, double endAngle)
+        {
+            double angle = (startAngle + endAngle) / 2.0;
+            double radius = depth * LayerRadiusDelta;
+            double cx = radius * Math.Cos(angle);
+            double cy = radius * Math.Sin(angle);
+
+            var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
+            var info = new NodeLayoutInfo
+            {
+                Node = node,
+                Depth = depth,
+                Width = w,
+                Height = h,
+                X = cx - w / 2.0,
+                Y = cy - h / 2.0,
+                Angle = angle,
+                Radius = radius
+            };
+            layoutMap[node] = info;
+
+            if (node.IsExpanded && node.Children.Count > 0)
+            {
+                int totalChildLeaves = node.Children.Sum(GetSubtreeLeafCount);
+                double curAngle = startAngle;
+                double span = endAngle - startAngle;
+
+                foreach (var child in node.Children)
+                {
+                    int childLeaves = GetSubtreeLeafCount(child);
+                    double childSpan = (double)childLeaves / totalChildLeaves * span;
+                    LayoutRadialSubtree(child, depth + 1, curAngle, curAngle + childSpan);
+                    curAngle += childSpan;
+                }
+            }
+        }
+
+        if (roots.Count == 1)
+        {
+            var root = roots[0];
+            var (rw, rh) = GetNodeDimensions(root, 0, isVertical: false);
+            var rootInfo = new NodeLayoutInfo
+            {
+                Node = root,
+                Depth = 0,
+                Width = rw,
+                Height = rh,
+                X = -rw / 2.0,
+                Y = -rh / 2.0,
+                Angle = 0,
+                Radius = 0
+            };
+            layoutMap[root] = rootInfo;
+
+            if (root.IsExpanded && root.Children.Count > 0)
+            {
+                int totalLeaves = root.Children.Sum(GetSubtreeLeafCount);
+                double curAngle = 0.0;
+                foreach (var child in root.Children)
+                {
+                    int cLeaves = GetSubtreeLeafCount(child);
+                    double cSpan = (double)cLeaves / totalLeaves * (2.0 * Math.PI);
+                    LayoutRadialSubtree(child, 1, curAngle, curAngle + cSpan);
+                    curAngle += cSpan;
                 }
             }
         }
         else
         {
-            // VERTICAL LAYOUT (Top to bottom tree)
-            const double LevelVerticalGap = 44.0;
-            var depthMaxHeights = new Dictionary<int, double>();
-            void MeasureVisibleHeights(FolderNode node, int depth)
-            {
-                var (_, h) = GetNodeDimensions(node, depth, isVertical: true);
-                if (!depthMaxHeights.TryGetValue(depth, out double maxH) || h > maxH)
-                {
-                    depthMaxHeights[depth] = h;
-                }
-
-                if (node.IsExpanded && node.Children.Count > 0)
-                {
-                    foreach (var child in node.Children)
-                    {
-                        MeasureVisibleHeights(child, depth + 1);
-                    }
-                }
-            }
-
+            int totalLeaves = roots.Sum(GetSubtreeLeafCount);
+            double curAngle = 0.0;
             foreach (var root in roots)
             {
-                MeasureVisibleHeights(root, 0);
+                int rLeaves = GetSubtreeLeafCount(root);
+                double rSpan = (double)rLeaves / totalLeaves * (2.0 * Math.PI);
+                LayoutRadialSubtree(root, 0, curAngle, curAngle + rSpan);
+                curAngle += rSpan;
+            }
+        }
+
+        // Normalize so bounds are positive with ChartPadding
+        double minX = layoutMap.Values.Min(i => i.X);
+        double minY = layoutMap.Values.Min(i => i.Y);
+        double shiftX = ChartPadding - minX;
+        double shiftY = ChartPadding - minY;
+        foreach (var info in layoutMap.Values)
+        {
+            info.X += shiftX;
+            info.Y += shiftY;
+        }
+
+        return layoutMap;
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeLayout(IReadOnlyList<FolderNode> roots, OrgChartLayoutDirection layoutDirection)
+    {
+        return layoutDirection switch
+        {
+            OrgChartLayoutDirection.Vertical => ComputeVerticalLayout(roots),
+            OrgChartLayoutDirection.Mindmap => ComputeMindmapLayout(roots),
+            OrgChartLayoutDirection.Radial => ComputeRadialLayout(roots),
+            _ => ComputeHorizontalLayout(roots)
+        };
+    }
+
+    private static Dictionary<FolderNode, NodeLayoutInfo> ComputeLayout(IReadOnlyList<FolderNode> roots, bool isVertical)
+    {
+        return ComputeLayout(roots, isVertical ? OrgChartLayoutDirection.Vertical : OrgChartLayoutDirection.Horizontal);
+    }
+
+    private static Geometry CreateAnnularSectorGeometry(Point center, double innerR, double outerR, double startAngle, double endAngle)
+    {
+        double angleSpan = endAngle - startAngle;
+        double pad = Math.Min(0.015, angleSpan * 0.04);
+        double a1 = startAngle + pad;
+        double a2 = endAngle - pad;
+        if (a2 <= a1) { a1 = startAngle; a2 = endAngle; }
+
+        double pOut1X = center.X + outerR * Math.Cos(a1);
+        double pOut1Y = center.Y + outerR * Math.Sin(a1);
+        double pOut2X = center.X + outerR * Math.Cos(a2);
+        double pOut2Y = center.Y + outerR * Math.Sin(a2);
+
+        bool isLargeArc = (a2 - a1) > Math.PI;
+
+        var figure = new PathFigure
+        {
+            StartPoint = new Point(pOut1X, pOut1Y),
+            IsClosed = true,
+            IsFilled = true
+        };
+
+        figure.Segments.Add(new ArcSegment(new Point(pOut2X, pOut2Y), new Size(outerR, outerR), 0, isLargeArc, SweepDirection.Clockwise, true));
+
+        if (innerR > 0.001)
+        {
+            double pIn2X = center.X + innerR * Math.Cos(a2);
+            double pIn2Y = center.Y + innerR * Math.Sin(a2);
+            double pIn1X = center.X + innerR * Math.Cos(a1);
+            double pIn1Y = center.Y + innerR * Math.Sin(a1);
+
+            figure.Segments.Add(new LineSegment(new Point(pIn2X, pIn2Y), true));
+            figure.Segments.Add(new ArcSegment(new Point(pIn1X, pIn1Y), new Size(innerR, innerR), 0, isLargeArc, SweepDirection.Counterclockwise, true));
+        }
+        else
+        {
+            figure.Segments.Add(new LineSegment(center, true));
+        }
+
+        var geom = new PathGeometry();
+        geom.Figures.Add(figure);
+        return geom;
+    }
+
+    private ContextMenu CreateNodeContextMenu(FolderNode node, FrameworkElement element)
+    {
+        var menu = new ContextMenu { PlacementTarget = element };
+        var openInExplorerItem = new MenuItem
+        {
+            Header = "Open in Explorer",
+            Icon = CreateMenuItemIcon("ExplorerGeometry")
+        };
+        openInExplorerItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            OpenInExplorerRequested?.Invoke(node);
+        };
+
+        var focusItem = new MenuItem
+        {
+            Header = "Focus Folder (Fit Selection)",
+            Icon = CreateMenuItemIcon("FitGeometry")
+        };
+        focusItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            FitSelectedToView();
+        };
+
+        var addChildItem = new MenuItem
+        {
+            Header = "Add Child Folder",
+            Icon = CreateMenuItemIcon("PlusGeometry")
+        };
+        addChildItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            AddChildRequested?.Invoke(node);
+        };
+
+        var addSiblingItem = new MenuItem
+        {
+            Header = "Add Sibling Folder",
+            Icon = CreateMenuItemIcon("FolderGeometry")
+        };
+        addSiblingItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            AddSiblingRequested?.Invoke(node);
+        };
+
+        MenuItem? moveToRootItem = null;
+        if (node.Parent != null)
+        {
+            moveToRootItem = new MenuItem
+            {
+                Header = "Move to Root",
+                Icon = CreateMenuItemIcon("ArrowUpGeometry")
+            };
+            moveToRootItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                NodeMoved?.Invoke(node, null);
+            };
+        }
+
+        var renameItem = new MenuItem
+        {
+            Header = "Rename",
+            Icon = CreateMenuItemIcon("EditGeometry")
+        };
+        renameItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            if (element is Border box)
+            {
+                BeginRename(node, box);
+            }
+        };
+
+        var deleteItem = new MenuItem
+        {
+            Header = "Delete",
+            Icon = CreateMenuItemIcon("TrashGeometry", "BrushDanger")
+        };
+        deleteItem.SetResourceReference(MenuItem.ForegroundProperty, "BrushDanger");
+        deleteItem.Click += (_, _) =>
+        {
+            NodeClicked?.Invoke(node);
+            DeleteRequested?.Invoke(node);
+        };
+
+        menu.Items.Add(openInExplorerItem);
+        menu.Items.Add(focusItem);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(addChildItem);
+        menu.Items.Add(addSiblingItem);
+        if (moveToRootItem != null)
+        {
+            menu.Items.Add(moveToRootItem);
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(renameItem);
+        menu.Items.Add(deleteItem);
+
+        if (node.Children.Count > 0)
+        {
+            var toggleExpandItem = new MenuItem
+            {
+                Header = node.IsExpanded ? "Collapse Subfolders" : $"Expand ({node.Children.Count} Subfolders)",
+                Icon = CreateMenuItemIcon(node.IsExpanded ? "CollapseGeometry" : "ExpandGeometry")
+            };
+            toggleExpandItem.Click += (_, _) =>
+            {
+                NodeClicked?.Invoke(node);
+                node.IsExpanded = !node.IsExpanded;
+                RenderInternal();
+                StructureEdited?.Invoke();
+            };
+            menu.Items.Add(new Separator());
+            menu.Items.Add(toggleExpandItem);
+        }
+
+        return menu;
+    }
+
+    private void AttachNodeInteractions(FrameworkElement element, FolderNode node)
+    {
+        element.PreviewMouseLeftButtonDown += (s, e) =>
+        {
+            if (e.ClickCount == 2)
+            {
+                OpenInExplorerRequested?.Invoke(node);
+                e.Handled = true;
+                return;
+            }
+            NodeClicked?.Invoke(node);
+        };
+
+        element.PreviewMouseRightButtonDown += (s, e) =>
+        {
+            NodeClicked?.Invoke(node);
+        };
+
+        element.ContextMenu = CreateNodeContextMenu(node, element);
+    }
+
+    private void RenderSunburstInternal(double prevHOffset = 0, double prevVOffset = 0)
+    {
+        if (_lastRoots.Count == 0)
+        {
+            RootCanvas.Width = 0;
+            RootCanvas.Height = 0;
+            return;
+        }
+
+        int maxDepth = 0;
+        void MeasureMaxDepth(FolderNode node, int depth)
+        {
+            if (depth > maxDepth) maxDepth = depth;
+            if (node.IsExpanded && node.Children.Count > 0)
+            {
+                foreach (var c in node.Children)
+                    MeasureMaxDepth(c, depth + 1);
+            }
+        }
+        foreach (var r in _lastRoots)
+            MeasureMaxDepth(r, 0);
+
+        const double RootRadius = 60.0;
+        const double RingThickness = 65.0;
+        const double RingGap = 6.0;
+
+        double totalRadius = RootRadius + (maxDepth > 0 ? maxDepth * (RingThickness + RingGap) : 0);
+        double cx = totalRadius + ChartPadding + 20.0;
+        double cy = totalRadius + ChartPadding + 20.0;
+        Point center = new Point(cx, cy);
+
+        RootCanvas.Width = Math.Max(cx * 2, 100);
+        RootCanvas.Height = Math.Max(cy * 2, 100);
+
+        bool isDark = IsDarkTheme();
+
+        int GetSubtreeLeafCount(FolderNode node)
+        {
+            if (!node.IsExpanded || node.Children.Count == 0) return 1;
+            int sum = 0;
+            foreach (var c in node.Children) sum += GetSubtreeLeafCount(c);
+            return Math.Max(1, sum);
+        }
+
+        void RenderSector(FolderNode node, int depth, double innerR, double outerR, double startAngle, double endAngle)
+        {
+            var (fill, border, textCol) = GetPalette(depth);
+            bool isSelected = ReferenceEquals(node, _lastSelected);
+            bool isMatch = node.IsMatchingSearch;
+
+            Brush fillBrush = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
+            Brush borderBrush = isSelected ? GetSelectedBorderBrush() : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
+            Brush textBrush = new SolidColorBrush(textCol);
+
+            if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
+            {
+                borderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                fillBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B)) : new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
+                textBrush = isDark ? new SolidColorBrush(Color.FromRgb(0xEC, 0xFD, 0xF5)) : new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46));
+            }
+            else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
+            {
+                borderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
+                fillBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)) : new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
+                textBrush = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
             }
 
-            int maxDepthV = depthMaxHeights.Keys.Count > 0 ? depthMaxHeights.Keys.Max() : 0;
-            var levelY = new Dictionary<int, double>();
-            double runningY = ChartPadding;
-            for (int d = 0; d <= maxDepthV; d++)
+            Geometry geom;
+            if (innerR <= 0.001)
             {
-                levelY[d] = runningY;
-                double ch = depthMaxHeights.TryGetValue(d, out var h) ? h : BoxHeight;
-                runningY += ch + LevelVerticalGap;
-            }
-
-            Dictionary<int, (double MinX, double MaxX)> GetDepthProfileX(List<NodeLayoutInfo> nodes)
-            {
-                var profile = new Dictionary<int, (double MinX, double MaxX)>();
-                foreach (var n in nodes)
+                if (Math.Abs(endAngle - startAngle - 2 * Math.PI) < 0.05)
                 {
-                    double left = n.X;
-                    double right = n.X + n.Width;
-                    if (!profile.TryGetValue(n.Depth, out var span))
-                    {
-                        profile[n.Depth] = (left, right);
-                    }
-                    else
-                    {
-                        profile[n.Depth] = (Math.Min(span.MinX, left), Math.Max(span.MaxX, right));
-                    }
+                    geom = new EllipseGeometry(center, outerR, outerR);
                 }
-                return profile;
-            }
-
-            double ComputeShiftX(Dictionary<int, (double MinX, double MaxX)> prevProfile, Dictionary<int, (double MinX, double MaxX)> currProfile)
-            {
-                double maxShift = 0;
-                foreach (var kvp in currProfile)
+                else
                 {
-                    int depth = kvp.Key;
-                    if (prevProfile.TryGetValue(depth, out var prevSpan))
-                    {
-                        double requiredX = prevSpan.MaxX + MinHorizontalSpacing;
-                        double overlap = requiredX - kvp.Value.MinX;
-                        if (overlap > maxShift)
-                        {
-                            maxShift = overlap;
-                        }
-                    }
-                }
-                return maxShift;
-            }
-
-            void ShiftNodesX(List<NodeLayoutInfo> nodes, double deltaX)
-            {
-                if (Math.Abs(deltaX) < 0.0001) return;
-                foreach (var n in nodes)
-                {
-                    n.X += deltaX;
+                    geom = CreateAnnularSectorGeometry(center, 0, outerR, startAngle, endAngle);
                 }
             }
-
-            List<NodeLayoutInfo> LayoutSubtreeV(FolderNode node, int depth)
+            else
             {
-                var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
-                var nodeInfo = new NodeLayoutInfo
+                geom = CreateAnnularSectorGeometry(center, innerR, outerR, startAngle, endAngle);
+            }
+
+            var path = new System.Windows.Shapes.Path
+            {
+                Data = geom,
+                Fill = fillBrush,
+                Stroke = borderBrush,
+                StrokeThickness = isSelected ? 2.8 : (isMatch ? 2.0 : 1.2),
+                Cursor = Cursors.Hand,
+                ToolTip = $"{node.Name}{(node.Children.Count > 0 ? $" ({node.Children.Count} subfolders)" : "")}"
+            };
+
+            if (isSelected)
+            {
+                path.Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Node = node,
-                    Depth = depth,
-                    Width = w,
-                    Height = h,
-                    X = 0,
-                    Y = levelY.TryGetValue(depth, out double cy) ? cy : (ChartPadding + depth * (BoxHeight + LevelVerticalGap))
+                    Color = isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88),
+                    BlurRadius = 8,
+                    ShadowDepth = 0,
+                    Opacity = 0.5
                 };
-                layoutMap[node] = nodeInfo;
-
-                var visibleChildren = (node.IsExpanded && node.Children.Count > 0)
-                    ? node.Children
-                    : (IReadOnlyList<FolderNode>)Array.Empty<FolderNode>();
-
-                var allSubtreeNodes = new List<NodeLayoutInfo> { nodeInfo };
-
-                if (visibleChildren.Count == 0)
-                {
-                    return allSubtreeNodes;
-                }
-
-                var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
-                Dictionary<int, (double MinX, double MaxX)> cumulativeProfile = new();
-
-                foreach (var child in visibleChildren)
-                {
-                    var childSubtreeNodes = LayoutSubtreeV(child, depth + 1);
-                    var childProfile = GetDepthProfileX(childSubtreeNodes);
-
-                    if (cumulativeChildrenNodes.Count > 0)
-                    {
-                        double shift = ComputeShiftX(cumulativeProfile, childProfile);
-                        if (shift > 0)
-                        {
-                            ShiftNodesX(childSubtreeNodes, shift);
-                            childProfile = GetDepthProfileX(childSubtreeNodes);
-                        }
-                    }
-
-                    cumulativeChildrenNodes.AddRange(childSubtreeNodes);
-
-                    foreach (var kvp in childProfile)
-                    {
-                        if (!cumulativeProfile.TryGetValue(kvp.Key, out var span))
-                        {
-                            cumulativeProfile[kvp.Key] = kvp.Value;
-                        }
-                        else
-                        {
-                            cumulativeProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
-                        }
-                    }
-                }
-
-                // Center parent horizontally over its first and last visible children
-                double firstChildCenter = layoutMap[visibleChildren[0]].CenterX;
-                double lastChildCenter = layoutMap[visibleChildren[^1]].CenterX;
-                double desiredCenter = (firstChildCenter + lastChildCenter) / 2.0;
-                nodeInfo.X = desiredCenter - w / 2.0;
-
-                allSubtreeNodes.AddRange(cumulativeChildrenNodes);
-                return allSubtreeNodes;
             }
 
-            var cumulativeRootNodes = new List<NodeLayoutInfo>();
-            Dictionary<int, (double MinX, double MaxX)> cumulativeRootProfile = new();
+            AttachNodeInteractions(path, node);
+            RootCanvas.Children.Add(path);
+            _boxMap[path] = node;
 
-            foreach (var root in roots)
+            double span = endAngle - startAngle;
+            double midAngle = (startAngle + endAngle) / 2.0;
+            double midRadius = (innerR + outerR) / 2.0;
+            double arcLength = midRadius * span;
+
+            if (innerR <= 0.001)
             {
-                var rootSubtreeNodes = LayoutSubtreeV(root, 0);
-                var rootProfile = GetDepthProfileX(rootSubtreeNodes);
-
-                if (cumulativeRootNodes.Count > 0)
+                var label = new TextBlock
                 {
-                    double shift = ComputeShiftX(cumulativeRootProfile, rootProfile);
-                    if (shift > 0)
-                    {
-                        ShiftNodesX(rootSubtreeNodes, shift);
-                        rootProfile = GetDepthProfileX(rootSubtreeNodes);
-                    }
-                }
+                    Text = node.Name,
+                    Foreground = textBrush,
+                    FontSize = 12.0,
+                    FontWeight = FontWeights.SemiBold,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextAlignment = TextAlignment.Center,
+                    MaxWidth = outerR * 1.6,
+                    IsHitTestVisible = false
+                };
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Canvas.SetLeft(label, cx - label.DesiredSize.Width / 2.0);
+                Canvas.SetTop(label, cy - label.DesiredSize.Height / 2.0);
+                RootCanvas.Children.Add(label);
+            }
+            else if (arcLength >= 22.0)
+            {
+                double textX = cx + midRadius * Math.Cos(midAngle);
+                double textY = cy + midRadius * Math.Sin(midAngle);
+                double maxLabelW = Math.Max(20, Math.Min(outerR - innerR - 8.0, arcLength - 4.0));
 
-                cumulativeRootNodes.AddRange(rootSubtreeNodes);
-
-                foreach (var kvp in rootProfile)
+                var label = new TextBlock
                 {
-                    if (!cumulativeRootProfile.TryGetValue(kvp.Key, out var span))
-                    {
-                        cumulativeRootProfile[kvp.Key] = kvp.Value;
-                    }
-                    else
-                    {
-                        cumulativeRootProfile[kvp.Key] = (Math.Min(span.MinX, kvp.Value.MinX), Math.Max(span.MaxX, kvp.Value.MaxX));
-                    }
-                }
+                    Text = node.Name,
+                    Foreground = textBrush,
+                    FontSize = 10.5,
+                    FontWeight = FontWeights.Medium,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = maxLabelW,
+                    IsHitTestVisible = false
+                };
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                double deg = midAngle * 180.0 / Math.PI;
+                if (deg > 90 && deg < 270)
+                    deg += 180;
+
+                label.RenderTransformOrigin = new Point(0.5, 0.5);
+                label.RenderTransform = new RotateTransform(deg);
+
+                Canvas.SetLeft(label, textX - label.DesiredSize.Width / 2.0);
+                Canvas.SetTop(label, textY - label.DesiredSize.Height / 2.0);
+                RootCanvas.Children.Add(label);
             }
 
-            // Normalize so left-most node is anchored cleanly at ChartPadding
-            if (layoutMap.Count > 0)
+            if (node.IsExpanded && node.Children.Count > 0)
             {
-                double minX = layoutMap.Values.Min(i => i.X);
-                double offsetX = ChartPadding - minX;
-                if (Math.Abs(offsetX) > 0.001)
+                int totalChildLeaves = node.Children.Sum(GetSubtreeLeafCount);
+                double curAngle = startAngle;
+                double nextInnerR = outerR + RingGap;
+                double nextOuterR = nextInnerR + RingThickness;
+
+                foreach (var child in node.Children)
                 {
-                    foreach (var info in layoutMap.Values)
-                        info.X += offsetX;
+                    int childLeaves = GetSubtreeLeafCount(child);
+                    double childSpan = (double)childLeaves / totalChildLeaves * span;
+                    RenderSector(child, depth + 1, nextInnerR, nextOuterR, curAngle, curAngle + childSpan);
+                    curAngle += childSpan;
                 }
             }
         }
 
-        return layoutMap;
+        if (_lastRoots.Count == 1)
+        {
+            var root = _lastRoots[0];
+            RenderSector(root, 0, 0, RootRadius, 0, 2 * Math.PI);
+        }
+        else
+        {
+            int totalLeaves = _lastRoots.Sum(GetSubtreeLeafCount);
+            double curAngle = 0.0;
+            foreach (var root in _lastRoots)
+            {
+                int rLeaves = GetSubtreeLeafCount(root);
+                double rSpan = (double)rLeaves / totalLeaves * (2 * Math.PI);
+                RenderSector(root, 0, 0, RootRadius, curAngle, curAngle + rSpan);
+                curAngle += rSpan;
+            }
+        }
+
+        if (prevHOffset > 0 || prevVOffset > 0)
+        {
+            ChartScrollViewer.ScrollToHorizontalOffset(prevHOffset);
+            ChartScrollViewer.ScrollToVerticalOffset(prevVOffset);
+        }
+
+        UpdateContainerAlignment();
     }
 
     private void RenderInternal()
@@ -978,8 +1620,13 @@ public partial class OrgChartView : UserControl
             return;
         }
 
-        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
-        var layoutMap = ComputeLayout(_lastRoots, isVertical);
+        if (LayoutDirection == OrgChartLayoutDirection.Sunburst)
+        {
+            RenderSunburstInternal(prevHOffset, prevVOffset);
+            return;
+        }
+
+        var layoutMap = ComputeLayout(_lastRoots, LayoutDirection);
 
         double maxX = layoutMap.Values.Max(info => info.X + info.Width);
         double maxY = layoutMap.Values.Max(info => info.Y + info.Height);
@@ -996,13 +1643,35 @@ public partial class OrgChartView : UserControl
             {
                 if (!layoutMap.TryGetValue(child, out var childLayout)) continue;
 
-                Point startPoint = isVertical
-                    ? new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height)
-                    : new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
-
-                Point endPoint = isVertical
-                    ? new Point(childLayout.CenterX, childLayout.Y)
-                    : new Point(childLayout.X, childLayout.CenterY);
+                Point startPoint, endPoint;
+                if (LayoutDirection == OrgChartLayoutDirection.Vertical)
+                {
+                    startPoint = new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height);
+                    endPoint = new Point(childLayout.CenterX, childLayout.Y);
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Mindmap)
+                {
+                    if (childLayout.IsLeftBranch)
+                    {
+                        startPoint = new Point(parentLayout.X, parentLayout.CenterY);
+                        endPoint = new Point(childLayout.X + childLayout.Width, childLayout.CenterY);
+                    }
+                    else
+                    {
+                        startPoint = new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
+                        endPoint = new Point(childLayout.X, childLayout.CenterY);
+                    }
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                {
+                    startPoint = new Point(parentLayout.CenterX, parentLayout.CenterY);
+                    endPoint = new Point(childLayout.CenterX, childLayout.CenterY);
+                }
+                else // Horizontal
+                {
+                    startPoint = new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
+                    endPoint = new Point(childLayout.X, childLayout.CenterY);
+                }
 
                 var figure = new PathFigure { StartPoint = startPoint };
 
@@ -1013,14 +1682,26 @@ public partial class OrgChartView : UserControl
                         break;
 
                     case OrgChartConnectorStyle.Curved:
-                        if (isVertical)
+                        if (LayoutDirection == OrgChartLayoutDirection.Vertical)
                         {
                             double dy = (endPoint.Y - startPoint.Y) * 0.5;
                             var c1 = new Point(startPoint.X, startPoint.Y + dy);
                             var c2 = new Point(endPoint.X, endPoint.Y - dy);
                             figure.Segments.Add(new BezierSegment(c1, c2, endPoint, true));
                         }
-                        else
+                        else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                        {
+                            double pAngle = parentLayout.Angle;
+                            double cAngle = childLayout.Angle;
+                            double midR = (parentLayout.Radius + childLayout.Radius) / 2.0;
+                            var rootInfo = layoutMap.Values.FirstOrDefault(i => i.Depth == 0);
+                            double rcX = rootInfo?.CenterX ?? 0;
+                            double rcY = rootInfo?.CenterY ?? 0;
+                            Point c1 = new Point(rcX + midR * Math.Cos(pAngle), rcY + midR * Math.Sin(pAngle));
+                            Point c2 = new Point(rcX + midR * Math.Cos(cAngle), rcY + midR * Math.Sin(cAngle));
+                            figure.Segments.Add(new BezierSegment(c1, c2, endPoint, true));
+                        }
+                        else // Horizontal and Mindmap
                         {
                             double dx = (endPoint.X - startPoint.X) * 0.5;
                             var c1 = new Point(startPoint.X + dx, startPoint.Y);
@@ -1031,14 +1712,26 @@ public partial class OrgChartView : UserControl
 
                     case OrgChartConnectorStyle.Orthogonal:
                     default:
-                        if (isVertical)
+                        if (LayoutDirection == OrgChartLayoutDirection.Vertical)
                         {
                             double midY = (startPoint.Y + endPoint.Y) / 2.0;
                             figure.Segments.Add(new LineSegment(new Point(startPoint.X, midY), true));
                             figure.Segments.Add(new LineSegment(new Point(endPoint.X, midY), true));
                             figure.Segments.Add(new LineSegment(endPoint, true));
                         }
-                        else
+                        else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                        {
+                            double pAngle = parentLayout.Angle;
+                            double cAngle = childLayout.Angle;
+                            double midR = (parentLayout.Radius + childLayout.Radius) / 2.0;
+                            var rootInfo = layoutMap.Values.FirstOrDefault(i => i.Depth == 0);
+                            double rcX = rootInfo?.CenterX ?? 0;
+                            double rcY = rootInfo?.CenterY ?? 0;
+                            Point c1 = new Point(rcX + midR * Math.Cos(pAngle), rcY + midR * Math.Sin(pAngle));
+                            Point c2 = new Point(rcX + midR * Math.Cos(cAngle), rcY + midR * Math.Sin(cAngle));
+                            figure.Segments.Add(new BezierSegment(c1, c2, endPoint, true));
+                        }
+                        else // Horizontal and Mindmap
                         {
                             double midX = (startPoint.X + endPoint.X) / 2.0;
                             figure.Segments.Add(new LineSegment(new Point(midX, startPoint.Y), true));
@@ -1338,121 +2031,7 @@ public partial class OrgChartView : UserControl
                 NodeClicked?.Invoke(node);
             };
 
-            var menu = new ContextMenu { PlacementTarget = box };
-            var openInExplorerItem = new MenuItem
-            {
-                Header = "Open in Explorer",
-                Icon = CreateMenuItemIcon("ExplorerGeometry")
-            };
-            openInExplorerItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                OpenInExplorerRequested?.Invoke(node);
-            };
-
-            var focusItem = new MenuItem
-            {
-                Header = "Focus Folder (Fit Selection)",
-                Icon = CreateMenuItemIcon("FitGeometry")
-            };
-            focusItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                FitSelectedToView();
-            };
-
-            var addChildItem = new MenuItem
-            {
-                Header = "Add Child Folder",
-                Icon = CreateMenuItemIcon("PlusGeometry")
-            };
-            addChildItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                AddChildRequested?.Invoke(node);
-            };
-
-            var addSiblingItem = new MenuItem
-            {
-                Header = "Add Sibling Folder",
-                Icon = CreateMenuItemIcon("FolderGeometry")
-            };
-            addSiblingItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                AddSiblingRequested?.Invoke(node);
-            };
-
-            MenuItem? moveToRootItem = null;
-            if (node.Parent != null)
-            {
-                moveToRootItem = new MenuItem
-                {
-                    Header = "Move to Root",
-                    Icon = CreateMenuItemIcon("ArrowUpGeometry")
-                };
-                moveToRootItem.Click += (_, _) =>
-                {
-                    NodeClicked?.Invoke(node);
-                    NodeMoved?.Invoke(node, null);
-                };
-            }
-
-            var renameItem = new MenuItem
-            {
-                Header = "Rename",
-                Icon = CreateMenuItemIcon("EditGeometry")
-            };
-            renameItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                BeginRename(node, box);
-            };
-
-            var deleteItem = new MenuItem
-            {
-                Header = "Delete",
-                Icon = CreateMenuItemIcon("TrashGeometry", "BrushDanger")
-            };
-            deleteItem.SetResourceReference(MenuItem.ForegroundProperty, "BrushDanger");
-            deleteItem.Click += (_, _) =>
-            {
-                NodeClicked?.Invoke(node);
-                DeleteRequested?.Invoke(node);
-            };
-
-            menu.Items.Add(openInExplorerItem);
-            menu.Items.Add(focusItem);
-            menu.Items.Add(new Separator());
-            menu.Items.Add(addChildItem);
-            menu.Items.Add(addSiblingItem);
-            if (moveToRootItem != null)
-            {
-                menu.Items.Add(moveToRootItem);
-            }
-            menu.Items.Add(new Separator());
-            menu.Items.Add(renameItem);
-            menu.Items.Add(deleteItem);
-
-            if (node.Children.Count > 0)
-            {
-                var toggleExpandItem = new MenuItem
-                {
-                    Header = node.IsExpanded ? "Collapse Subfolders" : $"Expand ({node.Children.Count} Subfolders)",
-                    Icon = CreateMenuItemIcon(node.IsExpanded ? "CollapseGeometry" : "ExpandGeometry")
-                };
-                toggleExpandItem.Click += (_, _) =>
-                {
-                    NodeClicked?.Invoke(node);
-                    node.IsExpanded = !node.IsExpanded;
-                    RenderInternal();
-                    StructureEdited?.Invoke();
-                };
-                menu.Items.Add(new Separator());
-                menu.Items.Add(toggleExpandItem);
-            }
-
-            box.ContextMenu = menu;
+            box.ContextMenu = CreateNodeContextMenu(node, box);
 
             RootCanvas.Children.Add(box);
 
@@ -1506,12 +2085,39 @@ public partial class OrgChartView : UserControl
                 };
 
                 double badgeLeft, badgeTop;
-                if (isVertical)
+                if (LayoutDirection == OrgChartLayoutDirection.Vertical)
                 {
                     badgeLeft = info.CenterX - badgeWidth / 2.0;
                     badgeTop = info.Y + info.Height - (badgeHeight / 2.0);
                 }
-                else
+                else if (LayoutDirection == OrgChartLayoutDirection.Mindmap)
+                {
+                    if (info.IsLeftBranch)
+                    {
+                        badgeLeft = info.X - badgeWidth / 2.0;
+                        badgeTop = info.CenterY - (badgeHeight / 2.0);
+                    }
+                    else
+                    {
+                        badgeLeft = info.X + info.Width - (badgeWidth / 2.0);
+                        badgeTop = info.CenterY - (badgeHeight / 2.0);
+                    }
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                {
+                    double cos = Math.Cos(info.Angle);
+                    if (cos >= 0)
+                    {
+                        badgeLeft = info.X + info.Width - badgeWidth / 2.0;
+                        badgeTop = info.CenterY - badgeHeight / 2.0;
+                    }
+                    else
+                    {
+                        badgeLeft = info.X - badgeWidth / 2.0;
+                        badgeTop = info.CenterY - badgeHeight / 2.0;
+                    }
+                }
+                else // Horizontal
                 {
                     badgeLeft = info.X + info.Width - (badgeWidth / 2.0);
                     badgeTop = info.CenterY - (badgeHeight / 2.0);
@@ -1803,8 +2409,27 @@ public partial class OrgChartView : UserControl
         if (_lastRoots.Count == 0 || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
             throw new InvalidOperationException("Diagram canvas is empty.");
 
-        bool isVertical = LayoutDirection == OrgChartLayoutDirection.Vertical;
-        var layoutMap = ComputeLayout(_lastRoots, isVertical);
+        if (LayoutDirection == OrgChartLayoutDirection.Sunburst)
+        {
+            var rtbSunburst = RenderDiagramToBitmap(2.0);
+            using var ms = new MemoryStream();
+            var pngEncoder = new PngBitmapEncoder();
+            pngEncoder.Frames.Add(BitmapFrame.Create(rtbSunburst));
+            pngEncoder.Save(ms);
+            string base64Png = Convert.ToBase64String(ms.ToArray());
+
+            double w = RootCanvas.Width;
+            double h = RootCanvas.Height;
+            var sbSunburst = new StringBuilder();
+            sbSunburst.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            sbSunburst.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{h.ToString("F1", CultureInfo.InvariantCulture)}\" viewBox=\"0 0 {w.ToString("F1", CultureInfo.InvariantCulture)} {h.ToString("F1", CultureInfo.InvariantCulture)}\">");
+            sbSunburst.AppendLine($"  <image width=\"{w.ToString("F1", CultureInfo.InvariantCulture)}\" height=\"{h.ToString("F1", CultureInfo.InvariantCulture)}\" href=\"data:image/png;base64,{base64Png}\"/>");
+            sbSunburst.AppendLine("</svg>");
+            File.WriteAllText(filePath, sbSunburst.ToString(), Encoding.UTF8);
+            return;
+        }
+
+        var layoutMap = ComputeLayout(_lastRoots, LayoutDirection);
         if (layoutMap.Count == 0)
             throw new InvalidOperationException("Diagram canvas is empty.");
 
@@ -1829,13 +2454,35 @@ public partial class OrgChartView : UserControl
             {
                 if (!layoutMap.TryGetValue(child, out var childLayout)) continue;
 
-                Point startPoint = isVertical
-                    ? new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height)
-                    : new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
-
-                Point endPoint = isVertical
-                    ? new Point(childLayout.CenterX, childLayout.Y)
-                    : new Point(childLayout.X, childLayout.CenterY);
+                Point startPoint, endPoint;
+                if (LayoutDirection == OrgChartLayoutDirection.Vertical)
+                {
+                    startPoint = new Point(parentLayout.CenterX, parentLayout.Y + parentLayout.Height);
+                    endPoint = new Point(childLayout.CenterX, childLayout.Y);
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Mindmap)
+                {
+                    if (childLayout.IsLeftBranch)
+                    {
+                        startPoint = new Point(parentLayout.X, parentLayout.CenterY);
+                        endPoint = new Point(childLayout.X + childLayout.Width, childLayout.CenterY);
+                    }
+                    else
+                    {
+                        startPoint = new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
+                        endPoint = new Point(childLayout.X, childLayout.CenterY);
+                    }
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                {
+                    startPoint = new Point(parentLayout.CenterX, parentLayout.CenterY);
+                    endPoint = new Point(childLayout.CenterX, childLayout.CenterY);
+                }
+                else // Horizontal
+                {
+                    startPoint = new Point(parentLayout.X + parentLayout.Width, parentLayout.CenterY);
+                    endPoint = new Point(childLayout.X, childLayout.CenterY);
+                }
 
                 string strokeColor = ToHexColor(GetPalette(childLayout.Depth).Border);
 
@@ -1846,14 +2493,26 @@ public partial class OrgChartView : UserControl
                         break;
 
                     case OrgChartConnectorStyle.Curved:
-                        if (isVertical)
+                        if (LayoutDirection == OrgChartLayoutDirection.Vertical)
                         {
                             double dy = (endPoint.Y - startPoint.Y) * 0.5;
                             Point c1 = new Point(startPoint.X, startPoint.Y + dy);
                             Point c2 = new Point(endPoint.X, endPoint.Y - dy);
                             sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} C {c1.X.ToString("F1", CultureInfo.InvariantCulture)},{c1.Y.ToString("F1", CultureInfo.InvariantCulture)} {c2.X.ToString("F1", CultureInfo.InvariantCulture)},{c2.Y.ToString("F1", CultureInfo.InvariantCulture)} {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                         }
-                        else
+                        else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                        {
+                            double pAngle = parentLayout.Angle;
+                            double cAngle = childLayout.Angle;
+                            double midR = (parentLayout.Radius + childLayout.Radius) / 2.0;
+                            var rootInfo = layoutMap.Values.FirstOrDefault(i => i.Depth == 0);
+                            double rcX = rootInfo?.CenterX ?? 0;
+                            double rcY = rootInfo?.CenterY ?? 0;
+                            Point c1 = new Point(rcX + midR * Math.Cos(pAngle), rcY + midR * Math.Sin(pAngle));
+                            Point c2 = new Point(rcX + midR * Math.Cos(cAngle), rcY + midR * Math.Sin(cAngle));
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} C {c1.X.ToString("F1", CultureInfo.InvariantCulture)},{c1.Y.ToString("F1", CultureInfo.InvariantCulture)} {c2.X.ToString("F1", CultureInfo.InvariantCulture)},{c2.Y.ToString("F1", CultureInfo.InvariantCulture)} {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        else // Horizontal and Mindmap
                         {
                             double dx = (endPoint.X - startPoint.X) * 0.5;
                             Point c1 = new Point(startPoint.X + dx, startPoint.Y);
@@ -1864,12 +2523,24 @@ public partial class OrgChartView : UserControl
 
                     case OrgChartConnectorStyle.Orthogonal:
                     default:
-                        if (isVertical)
+                        if (LayoutDirection == OrgChartLayoutDirection.Vertical)
                         {
                             double midY = (startPoint.Y + endPoint.Y) / 2.0;
                             sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{midY.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
                         }
-                        else
+                        else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                        {
+                            double pAngle = parentLayout.Angle;
+                            double cAngle = childLayout.Angle;
+                            double midR = (parentLayout.Radius + childLayout.Radius) / 2.0;
+                            var rootInfo = layoutMap.Values.FirstOrDefault(i => i.Depth == 0);
+                            double rcX = rootInfo?.CenterX ?? 0;
+                            double rcY = rootInfo?.CenterY ?? 0;
+                            Point c1 = new Point(rcX + midR * Math.Cos(pAngle), rcY + midR * Math.Sin(pAngle));
+                            Point c2 = new Point(rcX + midR * Math.Cos(cAngle), rcY + midR * Math.Sin(cAngle));
+                            sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} C {c1.X.ToString("F1", CultureInfo.InvariantCulture)},{c1.Y.ToString("F1", CultureInfo.InvariantCulture)} {c2.X.ToString("F1", CultureInfo.InvariantCulture)},{c2.Y.ToString("F1", CultureInfo.InvariantCulture)} {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+                        }
+                        else // Horizontal and Mindmap
                         {
                             double midX = (startPoint.X + endPoint.X) / 2.0;
                             sb.AppendLine($"  <path d=\"M {startPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{startPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {midX.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)} L {endPoint.X.ToString("F1", CultureInfo.InvariantCulture)},{endPoint.Y.ToString("F1", CultureInfo.InvariantCulture)}\" fill=\"none\" stroke=\"{strokeColor}\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
@@ -1913,8 +2584,29 @@ public partial class OrgChartView : UserControl
                 bool expanded = node.IsExpanded;
                 double badgeHeight = 20;
                 double badgeWidth = expanded ? 20 : Math.Max(28, 16 + node.Children.Count.ToString().Length * 7.5);
-                double badgeX = isVertical ? info.CenterX - badgeWidth / 2.0 : info.X + info.Width - (badgeWidth / 2.0);
-                double badgeY = isVertical ? info.Y + info.Height - (badgeHeight / 2.0) : info.CenterY - (badgeHeight / 2.0);
+                double badgeX, badgeY;
+                if (LayoutDirection == OrgChartLayoutDirection.Vertical)
+                {
+                    badgeX = info.CenterX - badgeWidth / 2.0;
+                    badgeY = info.Y + info.Height - (badgeHeight / 2.0);
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Mindmap)
+                {
+                    badgeX = info.IsLeftBranch ? info.X - badgeWidth / 2.0 : info.X + info.Width - badgeWidth / 2.0;
+                    badgeY = info.CenterY - (badgeHeight / 2.0);
+                }
+                else if (LayoutDirection == OrgChartLayoutDirection.Radial)
+                {
+                    double cos = Math.Cos(info.Angle);
+                    badgeX = cos >= 0 ? info.X + info.Width - badgeWidth / 2.0 : info.X - badgeWidth / 2.0;
+                    badgeY = info.CenterY - (badgeHeight / 2.0);
+                }
+                else
+                {
+                    badgeX = info.X + info.Width - (badgeWidth / 2.0);
+                    badgeY = info.CenterY - (badgeHeight / 2.0);
+                }
+
                 string badgeBg = expanded ? (isDark ? "#132B39" : "#EEF2F6") : (isDark ? "#0F766E" : "#0D9488");
                 string badgeStroke = expanded ? (isDark ? "#38BDF8" : "#0284C7") : (isDark ? "#2DD4BF" : "#14B8A6");
                 string badgeFg = expanded ? (isDark ? "#CFFAFE" : "#0F172A") : "#FFFFFF";
