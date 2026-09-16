@@ -108,8 +108,17 @@ public partial class MainWindow : Window
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MainViewModel.IsOrgChartView) or nameof(MainViewModel.SelectedStructureNode))
+        if (e.PropertyName == nameof(MainViewModel.IsOrgChartView))
+        {
             RefreshOrgChartIfVisible();
+        }
+        else if (e.PropertyName == nameof(MainViewModel.SelectedStructureNode))
+        {
+            if (ViewModel.IsOrgChartView)
+            {
+                OrgChartHost.SelectNode(ViewModel.SelectedStructureNode);
+            }
+        }
     }
 
     private void RefreshOrgChartIfVisible()

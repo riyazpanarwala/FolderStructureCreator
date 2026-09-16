@@ -55,7 +55,7 @@ public partial class OrgChartView : UserControl
     {
         if (d is OrgChartView chart)
         {
-            chart.RenderInternal();
+            chart.RequestRender();
         }
     }
 
@@ -76,7 +76,7 @@ public partial class OrgChartView : UserControl
     {
         if (d is OrgChartView chart)
         {
-            chart.RenderInternal();
+            chart.RequestRender();
         }
     }
 
@@ -169,18 +169,37 @@ public partial class OrgChartView : UserControl
             : LightPalette[depth % LightPalette.Length];
     }
 
+    private static readonly Dictionary<(byte A, byte R, byte G, byte B), SolidColorBrush> BrushCache = new();
+    private static SolidColorBrush GetCachedBrush(Color color)
+    {
+        var key = (color.A, color.R, color.G, color.B);
+        if (!BrushCache.TryGetValue(key, out var brush))
+        {
+            brush = new SolidColorBrush(color);
+            brush.Freeze();
+            BrushCache[key] = brush;
+        }
+        return brush;
+    }
+
+    private static readonly SolidColorBrush SelectedBorderHighContrastBrush = GetCachedBrush(Color.FromRgb(0xFF, 0xFF, 0x00));
+    private static readonly SolidColorBrush SelectedBorderDarkBrush = GetCachedBrush(Color.FromRgb(0x2D, 0xD4, 0xBF));
+    private static readonly SolidColorBrush SelectedBorderLightBrush = GetCachedBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+
     private static Brush GetSelectedBorderBrush()
     {
         if (IsHighContrastTheme())
-            return new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0x00));
+            return SelectedBorderHighContrastBrush;
         return IsDarkTheme()
-            ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF))
-            : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+            ? SelectedBorderDarkBrush
+            : SelectedBorderLightBrush;
     }
 
-    private static readonly SolidColorBrush DragHoverBrush = new(Color.FromRgb(0x02, 0x84, 0xC7)); // Sky blue highlight for drag target
-    private static readonly SolidColorBrush SearchMatchBorderBrush = new(Color.FromRgb(0xD9, 0x77, 0x06)); // Gold/Amber border for search match
-    private static readonly SolidColorBrush SearchMatchBackgroundBrush = new(Color.FromRgb(0xFE, 0xF0, 0x8A)); // Bright yellow fill for search match
+    private static readonly SolidColorBrush DragHoverBrush = GetCachedBrush(Color.FromRgb(0x02, 0x84, 0xC7)); // Sky blue highlight for drag target
+    private static readonly SolidColorBrush SearchMatchBorderBrush = GetCachedBrush(Color.FromRgb(0xD9, 0x77, 0x06)); // Gold/Amber border for search match
+    private static readonly SolidColorBrush SearchMatchBackgroundBrush = GetCachedBrush(Color.FromRgb(0xFE, 0xF0, 0x8A)); // Bright yellow fill for search match
+
+    private static readonly Dictionary<(string Text, int SizeKey), double> TextWidthCache = new();
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
@@ -213,7 +232,7 @@ public partial class OrgChartView : UserControl
         ChartScrollViewer.PreviewMouseUp += ChartScrollViewer_PreviewMouseUp;
         ChartScrollViewer.SizeChanged += (_, _) => UpdateContainerAlignment();
 
-        FolderStructureCreator.Services.ThemeService.ThemeChanged += _ => RenderInternal();
+        FolderStructureCreator.Services.ThemeService.ThemeChanged += _ => RequestRender();
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -282,12 +301,159 @@ public partial class OrgChartView : UserControl
         }
     }
 
+    private bool _isRenderScheduled;
+
+    /// <summary>
+    /// Schedules a render pass on the UI dispatcher at Render priority.
+    /// Debounces consecutive render requests during tab transitions or layout property changes.
+    /// </summary>
+    public void RequestRender()
+    {
+        if (_isRenderScheduled) return;
+        _isRenderScheduled = true;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() =>
+        {
+            _isRenderScheduled = false;
+            RenderInternal();
+        }));
+    }
+
     /// <summary>Redraws the whole chart for the given roots, highlighting the selected node if any.</summary>
     public void Render(IEnumerable<FolderNode> roots, FolderNode? selected)
     {
         _lastRoots = roots.ToList();
         _lastSelected = selected;
+        _isRenderScheduled = false;
         RenderInternal();
+    }
+
+    private sealed record NodeVisualMeta(
+        int Depth,
+        Brush NormalBorder,
+        Brush NormalBackground,
+        Brush TextForeground,
+        bool IsMatch,
+        bool HasDiffBadge,
+        StackPanel? NamePanel,
+        TextBlock? NameTextBlock);
+
+    /// <summary>
+    /// Updates the selected node visually in-place without tearing down or rebuilding the canvas.
+    /// If the chart has not been rendered yet or the node is outside the current visual tree,
+    /// a full render is performed.
+    /// </summary>
+    public void SelectNode(FolderNode? node)
+    {
+        if (ReferenceEquals(_lastSelected, node)) return;
+
+        // If chart is empty or not rendered yet, trigger full render
+        if (_boxMap.Count == 0 || _lastRoots.Count == 0)
+        {
+            _lastSelected = node;
+            RequestRender();
+            return;
+        }
+
+        // If node is non-null and not found in current visual map (e.g. collapsed ancestor), full render to reveal it
+        if (node != null && !_boxMap.Values.Any(n => ReferenceEquals(n, node)))
+        {
+            _lastSelected = node;
+            RequestRender();
+            return;
+        }
+
+        // Unselect previous
+        if (_lastSelected != null)
+        {
+            var prevEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
+            if (prevEntry.Key != null)
+            {
+                ApplySelectionVisuals(prevEntry.Key, _lastSelected, false);
+            }
+        }
+
+        _lastSelected = node;
+
+        // Select new
+        if (_lastSelected != null)
+        {
+            var newEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
+            if (newEntry.Key != null)
+            {
+                ApplySelectionVisuals(newEntry.Key, _lastSelected, true);
+            }
+        }
+    }
+
+    private void ApplySelectionVisuals(FrameworkElement element, FolderNode node, bool isSelected)
+    {
+        bool isDark = IsDarkTheme();
+        if (element is Border box && box.Tag is NodeVisualMeta meta)
+        {
+            if (isSelected)
+            {
+                box.BorderBrush = GetSelectedBorderBrush();
+                box.BorderThickness = new Thickness(2.8);
+                box.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88),
+                    BlurRadius = 6,
+                    ShadowDepth = 0,
+                    Opacity = 0.3
+                };
+                if (meta.NameTextBlock != null)
+                {
+                    meta.NameTextBlock.FontWeight = FontWeights.Bold;
+                }
+                if (meta.NamePanel != null && (meta.NamePanel.Children.Count == 0 || !(meta.NamePanel.Children[0] is TextBlock tb && tb.Text == "● ")))
+                {
+                    meta.NamePanel.Children.Insert(0, new TextBlock
+                    {
+                        Text = "● ",
+                        FontSize = 9.5,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = isDark ? GetCachedBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : GetCachedBrush(Color.FromRgb(0x0D, 0x94, 0x88)),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 2, 0)
+                    });
+                }
+            }
+            else
+            {
+                box.BorderBrush = meta.NormalBorder;
+                box.BorderThickness = new Thickness((meta.IsMatch || meta.HasDiffBadge) ? 2.0 : 1.2);
+                box.Effect = null;
+                if (meta.NameTextBlock != null)
+                {
+                    meta.NameTextBlock.FontWeight = FontWeights.SemiBold;
+                }
+                if (meta.NamePanel != null && meta.NamePanel.Children.Count > 1 && meta.NamePanel.Children[0] is TextBlock tb && tb.Text == "● ")
+                {
+                    meta.NamePanel.Children.RemoveAt(0);
+                }
+            }
+        }
+        else if (element is System.Windows.Shapes.Path path && path.Tag is NodeVisualMeta pathMeta)
+        {
+            if (isSelected)
+            {
+                path.Stroke = GetSelectedBorderBrush();
+                path.StrokeThickness = 2.8;
+                path.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = isDark ? Color.FromRgb(0x2D, 0xD4, 0xBF) : Color.FromRgb(0x0D, 0x94, 0x88),
+                    BlurRadius = 8,
+                    ShadowDepth = 0,
+                    Opacity = 0.5
+                };
+            }
+            else
+            {
+                path.Stroke = pathMeta.NormalBorder;
+                path.StrokeThickness = pathMeta.IsMatch ? 2.0 : 1.2;
+                path.Effect = null;
+            }
+        }
     }
 
     /// <summary>Scrolls/centers the ScrollViewer viewport on the selected node box if present.</summary>
@@ -511,18 +677,46 @@ public partial class OrgChartView : UserControl
         FontWeights.Bold,
         FontStretches.Normal);
 
+    private static readonly GlyphTypeface? NodeGlyphTypeface = NodeTextTypeface.TryGetGlyphTypeface(out var gtf) ? gtf : null;
+
     private static double MeasureTextWidth(string text, double fontSize)
     {
         if (string.IsNullOrEmpty(text)) return 0;
-        var formattedText = new FormattedText(
-            text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            NodeTextTypeface,
-            fontSize,
-            Brushes.Black,
-            1.0);
-        return formattedText.WidthIncludingTrailingWhitespace;
+        int sizeKey = (int)Math.Round(fontSize * 10);
+        var cacheKey = (text, sizeKey);
+        if (TextWidthCache.TryGetValue(cacheKey, out double cachedWidth))
+            return cachedWidth;
+
+        double measured;
+        if (NodeGlyphTypeface != null)
+        {
+            double total = 0;
+            var cmap = NodeGlyphTypeface.CharacterToGlyphMap;
+            var advances = NodeGlyphTypeface.AdvanceWidths;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (cmap.TryGetValue(text[i], out ushort glyphIndex))
+                    total += advances[glyphIndex] * fontSize;
+                else
+                    total += 0.6 * fontSize;
+            }
+            measured = total;
+        }
+        else
+        {
+            var formattedText = new FormattedText(
+                text,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                NodeTextTypeface,
+                fontSize,
+                Brushes.Black,
+                1.0);
+            measured = formattedText.WidthIncludingTrailingWhitespace;
+        }
+
+        TextWidthCache[cacheKey] = measured;
+        return measured;
     }
 
     private static (double Width, double Height) GetNodeDimensions(FolderNode node, int depth, bool isVertical = false)
@@ -1396,7 +1590,18 @@ public partial class OrgChartView : UserControl
             NodeClicked?.Invoke(node);
         };
 
-        element.ContextMenu = CreateNodeContextMenu(node, element);
+        element.MouseRightButtonUp += (s, e) =>
+        {
+            element.ContextMenu = CreateNodeContextMenu(node, element);
+            element.ContextMenu.PlacementTarget = element;
+            element.ContextMenu.IsOpen = true;
+            e.Handled = true;
+        };
+
+        element.ContextMenuOpening += (s, e) =>
+        {
+            element.ContextMenu = CreateNodeContextMenu(node, element);
+        };
     }
 
     private void RenderSunburstInternal(double prevHOffset = 0, double prevVOffset = 0)
@@ -1449,22 +1654,24 @@ public partial class OrgChartView : UserControl
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
-            Brush fillBrush = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
-            Brush borderBrush = isSelected ? GetSelectedBorderBrush() : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
-            Brush textBrush = new SolidColorBrush(textCol);
+            Brush fillBrush = isMatch ? SearchMatchBackgroundBrush : GetCachedBrush(fill);
+            Brush normalBorderBrush = isMatch ? SearchMatchBorderBrush : GetCachedBrush(border);
+            Brush textBrush = GetCachedBrush(textCol);
 
             if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
             {
-                borderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
-                fillBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B)) : new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
-                textBrush = isDark ? new SolidColorBrush(Color.FromRgb(0xEC, 0xFD, 0xF5)) : new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46));
+                normalBorderBrush = GetCachedBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                fillBrush = isDark ? GetCachedBrush(Color.FromRgb(0x06, 0x4E, 0x3B)) : GetCachedBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
+                textBrush = isDark ? GetCachedBrush(Color.FromRgb(0xEC, 0xFD, 0xF5)) : GetCachedBrush(Color.FromRgb(0x06, 0x5F, 0x46));
             }
             else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
             {
-                borderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
-                fillBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)) : new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
-                textBrush = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
+                normalBorderBrush = GetCachedBrush(Color.FromRgb(0x64, 0x74, 0x8B));
+                fillBrush = isDark ? GetCachedBrush(Color.FromRgb(0x1E, 0x29, 0x3B)) : GetCachedBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
+                textBrush = GetCachedBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
             }
+
+            Brush borderBrush = isSelected ? GetSelectedBorderBrush() : normalBorderBrush;
 
             Geometry geom;
             if (innerR <= 0.001)
@@ -1490,7 +1697,8 @@ public partial class OrgChartView : UserControl
                 Stroke = borderBrush,
                 StrokeThickness = isSelected ? 2.8 : (isMatch ? 2.0 : 1.2),
                 Cursor = Cursors.Hand,
-                ToolTip = $"{node.Name}{(node.Children.Count > 0 ? $" ({node.Children.Count} subfolders)" : "")}"
+                ToolTip = $"{node.Name}{(node.Children.Count > 0 ? $" ({node.Children.Count} subfolders)" : "")}",
+                Tag = new NodeVisualMeta(depth, normalBorderBrush, fillBrush, textBrush, isMatch, false, null, null)
             };
 
             if (isSelected)
@@ -1635,6 +1843,10 @@ public partial class OrgChartView : UserControl
         RootCanvas.Height = Math.Max(maxY + ChartPadding, 100);
 
         // ---- Connectors first, so node boxes visually sit on top of the lines. ----
+        // Group all connector figures by stroke color (depth palette) into frozen PathGeometries,
+        // reducing hundreds of individual Path FrameworkElements down to ~4-6 composite Paths.
+        var connectorGeometries = new Dictionary<int, PathGeometry>();
+
         void DrawConnectors(FolderNode node)
         {
             if (!node.IsExpanded || !layoutMap.TryGetValue(node, out var parentLayout)) return;
@@ -1673,7 +1885,7 @@ public partial class OrgChartView : UserControl
                     endPoint = new Point(childLayout.X, childLayout.CenterY);
                 }
 
-                var figure = new PathFigure { StartPoint = startPoint };
+                var figure = new PathFigure { StartPoint = startPoint, IsFilled = false };
 
                 switch (ConnectorStyle)
                 {
@@ -1741,15 +1953,12 @@ public partial class OrgChartView : UserControl
                         break;
                 }
 
-                var geometry = new PathGeometry();
-                geometry.Figures.Add(figure);
-
-                RootCanvas.Children.Add(new System.Windows.Shapes.Path
+                if (!connectorGeometries.TryGetValue(childLayout.Depth, out var geometry))
                 {
-                    Data = geometry,
-                    Stroke = new SolidColorBrush(GetPalette(childLayout.Depth).Border),
-                    StrokeThickness = 1.6
-                });
+                    geometry = new PathGeometry();
+                    connectorGeometries[childLayout.Depth] = geometry;
+                }
+                geometry.Figures.Add(figure);
 
                 DrawConnectors(child);
             }
@@ -1757,6 +1966,18 @@ public partial class OrgChartView : UserControl
 
         foreach (var root in _lastRoots)
             DrawConnectors(root);
+
+        foreach (var (depth, geometry) in connectorGeometries)
+        {
+            geometry.Freeze();
+            RootCanvas.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = geometry,
+                Stroke = GetCachedBrush(GetPalette(depth).Border),
+                StrokeThickness = 1.6,
+                IsHitTestVisible = false
+            });
+        }
 
         // ---- Node boxes. ----
         bool isDark = IsDarkTheme();
@@ -1768,58 +1989,54 @@ public partial class OrgChartView : UserControl
             bool isSelected = ReferenceEquals(node, _lastSelected);
             bool isMatch = node.IsMatchingSearch;
 
-            Brush boxBackground = isMatch ? SearchMatchBackgroundBrush : new SolidColorBrush(fill);
-            Brush boxBorderBrush = isSelected ? GetSelectedBorderBrush() : (isMatch ? SearchMatchBorderBrush : new SolidColorBrush(border));
-            Brush textForeground = new SolidColorBrush(textCol);
-            Brush badgeForeground = new SolidColorBrush(isDark ? Color.FromRgb(0x94, 0xA3, 0xB8) : Color.FromRgb(0x47, 0x55, 0x69));
+            Brush boxBackground = isMatch ? SearchMatchBackgroundBrush : GetCachedBrush(fill);
+            Brush normalBorderBrush = isMatch ? SearchMatchBorderBrush : GetCachedBrush(border);
+            Brush textForeground = GetCachedBrush(textCol);
+            Brush badgeForeground = isDark ? GetCachedBrush(Color.FromRgb(0x94, 0xA3, 0xB8)) : GetCachedBrush(Color.FromRgb(0x47, 0x55, 0x69));
 
             if (node.DiffStatus == NodeDiffStatus.MissingOnDisk)
             {
-                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
+                normalBorderBrush = GetCachedBrush(Color.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
                 boxBackground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0x06, 0x4E, 0x3B))
-                    : new SolidColorBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
+                    ? GetCachedBrush(Color.FromRgb(0x06, 0x4E, 0x3B))
+                    : GetCachedBrush(Color.FromRgb(0xD1, 0xFA, 0xE5));
                 textForeground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0xEC, 0xFD, 0xF5))
-                    : new SolidColorBrush(Color.FromRgb(0x06, 0x5F, 0x46));
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
+                    ? GetCachedBrush(Color.FromRgb(0xEC, 0xFD, 0xF5))
+                    : GetCachedBrush(Color.FromRgb(0x06, 0x5F, 0x46));
+                badgeForeground = GetCachedBrush(Color.FromRgb(0x34, 0xD3, 0x99));
             }
             else if (node.DiffStatus == NodeDiffStatus.MatchesDisk)
             {
-                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)); // Slate Neutral
+                normalBorderBrush = GetCachedBrush(Color.FromRgb(0x64, 0x74, 0x8B)); // Slate Neutral
                 boxBackground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B))
-                    : new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
+                    ? GetCachedBrush(Color.FromRgb(0x1E, 0x29, 0x3B))
+                    : GetCachedBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
                 textForeground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9))
-                    : new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
+                    ? GetCachedBrush(Color.FromRgb(0xF1, 0xF5, 0xF9))
+                    : GetCachedBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+                badgeForeground = GetCachedBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
             }
             else if (node.DiffStatus == NodeDiffStatus.ExtraOnDisk)
             {
-                boxBorderBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
+                normalBorderBrush = GetCachedBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
                 boxBackground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0x45, 0x1A, 0x03))
-                    : new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));
+                    ? GetCachedBrush(Color.FromRgb(0x45, 0x1A, 0x03))
+                    : GetCachedBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));
                 textForeground = isDark
-                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7))
-                    : new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F));
-                badgeForeground = new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24));
+                    ? GetCachedBrush(Color.FromRgb(0xFE, 0xF3, 0xC7))
+                    : GetCachedBrush(Color.FromRgb(0x78, 0x35, 0x0F));
+                badgeForeground = GetCachedBrush(Color.FromRgb(0xFB, 0xBF, 0x24));
             }
             else if (isMatch)
             {
-                textForeground = new SolidColorBrush(isDark ? Color.FromRgb(0xFE, 0xF0, 0x8A) : Color.FromRgb(0x85, 0x4D, 0x0E));
+                textForeground = isDark ? GetCachedBrush(Color.FromRgb(0xFE, 0xF0, 0x8A)) : GetCachedBrush(Color.FromRgb(0x85, 0x4D, 0x0E));
                 if (isDark)
                 {
-                    boxBackground = new SolidColorBrush(Color.FromRgb(0x42, 0x20, 0x06));
+                    boxBackground = GetCachedBrush(Color.FromRgb(0x42, 0x20, 0x06));
                 }
             }
 
-            var boxStack = new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
+            Brush boxBorderBrush = isSelected ? GetSelectedBorderBrush() : normalBorderBrush;
 
             var namePanel = new StackPanel
             {
@@ -1836,13 +2053,13 @@ public partial class OrgChartView : UserControl
                     Text = "● ",
                     FontSize = 9.5,
                     FontWeight = FontWeights.Bold,
-                    Foreground = isDark ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88)),
+                    Foreground = isDark ? GetCachedBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : GetCachedBrush(Color.FromRgb(0x0D, 0x94, 0x88)),
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 2, 0)
                 });
             }
 
-            namePanel.Children.Add(new TextBlock
+            var nameTextBlock = new TextBlock
             {
                 Text = node.Name,
                 FontSize = 12.0,
@@ -1850,12 +2067,18 @@ public partial class OrgChartView : UserControl
                 Foreground = textForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center
-            });
+            };
+            namePanel.Children.Add(nameTextBlock);
 
-            boxStack.Children.Add(namePanel);
-
+            UIElement boxContent;
             if (node.HasDiffBadge)
             {
+                var boxStack = new StackPanel
+                {
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                boxStack.Children.Add(namePanel);
                 boxStack.Children.Add(new TextBlock
                 {
                     Text = node.DiffBadgeText,
@@ -1865,6 +2088,11 @@ public partial class OrgChartView : UserControl
                     TextAlignment = TextAlignment.Center,
                     Margin = new Thickness(0, 2, 0, 0)
                 });
+                boxContent = boxStack;
+            }
+            else
+            {
+                boxContent = namePanel;
             }
 
             var box = new Border
@@ -1879,7 +2107,8 @@ public partial class OrgChartView : UserControl
                 ToolTip = node.Name,
                 Focusable = true,
                 FocusVisualStyle = null,
-                Child = boxStack
+                Child = boxContent,
+                Tag = new NodeVisualMeta(info.Depth, normalBorderBrush, boxBackground, textForeground, isMatch, node.HasDiffBadge, namePanel, nameTextBlock)
             };
 
             if (isSelected)
@@ -1893,12 +2122,12 @@ public partial class OrgChartView : UserControl
                 };
             }
 
-            Brush originalBorder = boxBorderBrush;
+            Brush originalBorder = normalBorderBrush;
             box.MouseEnter += (s, e) =>
             {
                 if (!ReferenceEquals(node, _lastSelected))
                 {
-                    box.BorderBrush = isDark ? new SolidColorBrush(Color.FromArgb(0xDD, 0x5E, 0xEA, 0xD4)) : new SolidColorBrush(Color.FromArgb(0xDD, 0x14, 0xB8, 0xA6));
+                    box.BorderBrush = isDark ? GetCachedBrush(Color.FromArgb(0xDD, 0x5E, 0xEA, 0xD4)) : GetCachedBrush(Color.FromArgb(0xDD, 0x14, 0xB8, 0xA6));
                 }
             };
             box.MouseLeave += (s, e) =>
@@ -1913,7 +2142,7 @@ public partial class OrgChartView : UserControl
                 if (!ReferenceEquals(node, _lastSelected))
                 {
                     box.BorderThickness = new Thickness(2.2);
-                    box.BorderBrush = isDark ? new SolidColorBrush(Color.FromRgb(0x5E, 0xEA, 0xD4)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88));
+                    box.BorderBrush = isDark ? GetCachedBrush(Color.FromRgb(0x5E, 0xEA, 0xD4)) : GetCachedBrush(Color.FromRgb(0x0D, 0x94, 0x88));
                 }
             };
             box.LostFocus += (s, e) =>
@@ -2031,7 +2260,18 @@ public partial class OrgChartView : UserControl
                 NodeClicked?.Invoke(node);
             };
 
-            box.ContextMenu = CreateNodeContextMenu(node, box);
+            box.MouseRightButtonUp += (s, e) =>
+            {
+                box.ContextMenu = CreateNodeContextMenu(node, box);
+                box.ContextMenu.PlacementTarget = box;
+                box.ContextMenu.IsOpen = true;
+                e.Handled = true;
+            };
+
+            box.ContextMenuOpening += (s, e) =>
+            {
+                box.ContextMenu = CreateNodeContextMenu(node, box);
+            };
 
             RootCanvas.Children.Add(box);
 
@@ -2047,7 +2287,7 @@ public partial class OrgChartView : UserControl
                     FontSize = expanded ? 12.0 : 10.0,
                     FontWeight = FontWeights.Bold,
                     Foreground = expanded
-                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0xCF, 0xFA, 0xFE)) : new SolidColorBrush(Color.FromRgb(0x0F, 0x17, 0x2A)))
+                        ? (isDark ? GetCachedBrush(Color.FromRgb(0xCF, 0xFA, 0xFE)) : GetCachedBrush(Color.FromRgb(0x0F, 0x17, 0x2A)))
                         : Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -2060,11 +2300,11 @@ public partial class OrgChartView : UserControl
                     Height = badgeHeight,
                     CornerRadius = new CornerRadius(badgeHeight / 2.0),
                     Background = expanded
-                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x13, 0x2B, 0x39)) : new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF6)))
-                        : (isDark ? new SolidColorBrush(Color.FromRgb(0x0F, 0x76, 0x6E)) : new SolidColorBrush(Color.FromRgb(0x0D, 0x94, 0x88))),
+                        ? (isDark ? GetCachedBrush(Color.FromRgb(0x13, 0x2B, 0x39)) : GetCachedBrush(Color.FromRgb(0xEE, 0xF2, 0xF6)))
+                        : (isDark ? GetCachedBrush(Color.FromRgb(0x0F, 0x76, 0x6E)) : GetCachedBrush(Color.FromRgb(0x0D, 0x94, 0x88))),
                     BorderBrush = expanded
-                        ? (isDark ? new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8)) : new SolidColorBrush(Color.FromRgb(0x02, 0x84, 0xC7)))
-                        : (isDark ? new SolidColorBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : new SolidColorBrush(Color.FromRgb(0x14, 0xB8, 0xA6))),
+                        ? (isDark ? GetCachedBrush(Color.FromRgb(0x38, 0xBD, 0xF8)) : GetCachedBrush(Color.FromRgb(0x02, 0x84, 0xC7)))
+                        : (isDark ? GetCachedBrush(Color.FromRgb(0x2D, 0xD4, 0xBF)) : GetCachedBrush(Color.FromRgb(0x14, 0xB8, 0xA6))),
                     BorderThickness = new Thickness(1.4),
                     Cursor = Cursors.Hand,
                     ToolTip = expanded
