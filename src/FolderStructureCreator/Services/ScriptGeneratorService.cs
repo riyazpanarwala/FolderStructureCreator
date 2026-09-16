@@ -18,6 +18,8 @@ public static class ScriptGeneratorService
 
         void Traverse(FolderNode node, string parentPath)
         {
+            if (node.IsFile) return;
+
             string currentPath = string.IsNullOrEmpty(parentPath) ? node.Name : $"{parentPath}/{node.Name}";
             paths.Add(currentPath);
 
@@ -104,6 +106,7 @@ public static class ScriptGeneratorService
         sb.AppendLine();
         sb.AppendLine("set \"TARGET_DIR=%~1\"");
         sb.AppendLine("if \"%TARGET_DIR%\"==\"\" set \"TARGET_DIR=%CD%\"");
+        sb.AppendLine("if \"%TARGET_DIR:~-1%\"==\"\\\" set \"TARGET_DIR=%TARGET_DIR:~0,-1%\"");
         sb.AppendLine();
         sb.AppendLine("echo Creating folder structure in: %TARGET_DIR%");
         sb.AppendLine("echo.");

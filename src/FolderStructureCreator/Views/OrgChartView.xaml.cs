@@ -715,6 +715,11 @@ public partial class OrgChartView : UserControl
             measured = formattedText.WidthIncludingTrailingWhitespace;
         }
 
+        if (TextWidthCache.Count >= 5000)
+        {
+            TextWidthCache.Clear();
+        }
+
         TextWidthCache[cacheKey] = measured;
         return measured;
     }
@@ -1835,6 +1840,12 @@ public partial class OrgChartView : UserControl
         }
 
         var layoutMap = ComputeLayout(_lastRoots, LayoutDirection);
+        if (layoutMap.Count == 0)
+        {
+            RootCanvas.Width = 0;
+            RootCanvas.Height = 0;
+            return;
+        }
 
         double maxX = layoutMap.Values.Max(info => info.X + info.Width);
         double maxY = layoutMap.Values.Max(info => info.Y + info.Height);
@@ -2581,7 +2592,7 @@ public partial class OrgChartView : UserControl
 
     public RenderTargetBitmap RenderDiagramToBitmap(double dpiScale = 2.0)
     {
-        if (RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
+        if (double.IsNaN(RootCanvas.Width) || double.IsNaN(RootCanvas.Height) || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
             throw new InvalidOperationException("Diagram canvas is empty.");
 
         if (_dragGhostBorder != null)
@@ -2646,7 +2657,7 @@ public partial class OrgChartView : UserControl
 
     public void ExportToSvg(string filePath)
     {
-        if (_lastRoots.Count == 0 || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
+        if (_lastRoots.Count == 0 || double.IsNaN(RootCanvas.Width) || double.IsNaN(RootCanvas.Height) || RootCanvas.Width <= 0 || RootCanvas.Height <= 0)
             throw new InvalidOperationException("Diagram canvas is empty.");
 
         if (LayoutDirection == OrgChartLayoutDirection.Sunburst)
@@ -2882,7 +2893,7 @@ public partial class OrgChartView : UserControl
     private static void WritePdfWithJpegImage(string filePath, byte[] jpegBytes, int pixelWidth, int pixelHeight, double widthPt, double heightPt)
     {
         using var fileStream = File.Create(filePath);
-        using var writer = new StreamWriter(fileStream, Encoding.ASCII);
+        using var writer = new StreamWriter(fileStream, Encoding.Latin1);
 
         var offsets = new List<long>();
 

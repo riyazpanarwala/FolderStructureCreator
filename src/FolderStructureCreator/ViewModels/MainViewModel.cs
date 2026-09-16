@@ -64,6 +64,7 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(ConciseStatusText));
                 OnPropertyChanged(nameof(DetailedStatusTooltip));
                 CreateStructureCommand.RaiseCanExecuteChanged();
+                CompareBlueprintWithDiskCommand?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -563,7 +564,20 @@ public class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CreateButtonTooltip));
         OnPropertyChanged(nameof(ConciseStatusText));
         OnPropertyChanged(nameof(DetailedStatusTooltip));
+        if (HasSearchQuery)
+        {
+            ApplySearch();
+        }
+
+        if (IsMetricsDashboardOpen)
+        {
+            RefreshMetrics();
+        }
+
         StructureChanged?.Invoke();
+        CompareBlueprintWithDiskCommand?.RaiseCanExecuteChanged();
+        ClearPlanCommand?.RaiseCanExecuteChanged();
+        CreateStructureCommand?.RaiseCanExecuteChanged();
         ExpandAllOrgChartCommand?.RaiseCanExecuteChanged();
         CollapseAllOrgChartCommand?.RaiseCanExecuteChanged();
         ExpandAllTreeCommand?.RaiseCanExecuteChanged();
@@ -1436,6 +1450,17 @@ public class MainViewModel : ViewModelBase
             sourceNode.Parent = targetParent;
             targetParent.Children.Add(sourceNode);
             targetParent.IsExpanded = true;
+
+            if (!string.IsNullOrEmpty(targetParent.RealPath))
+            {
+                sourceNode.UpdateRealPaths(Path.Combine(targetParent.RealPath, sourceNode.Name));
+            }
+            else if (TargetPathExists && !string.IsNullOrEmpty(TargetPath))
+            {
+                var computed = ComputeNodePathRelativeToTarget(sourceNode, TargetPath);
+                if (!string.IsNullOrEmpty(computed))
+                    sourceNode.UpdateRealPaths(computed);
+            }
         }
 
         SelectedStructureNode = sourceNode;
@@ -1472,6 +1497,11 @@ public class MainViewModel : ViewModelBase
             sourceNode.Parent.Children.Remove(sourceNode);
             sourceNode.Parent = null;
             RootFolders.Add(sourceNode);
+
+            if (TargetPathExists && !string.IsNullOrEmpty(TargetPath))
+            {
+                sourceNode.UpdateRealPaths(Path.Combine(TargetPath, sourceNode.Name));
+            }
         }
 
         SelectedStructureNode = sourceNode;
@@ -1646,7 +1676,7 @@ public class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() != true) return;
 
         var sourcePath = dialog.FolderName;
-        StatusMessage = $"Reading \"{Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar))}\"…";
+        StatusMessage = $"Reading \"{Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))}\"…";
 
         try
         {
@@ -1684,7 +1714,7 @@ public class MainViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return;
 
-        StatusMessage = $"Reading \"{Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar))}\"…";
+        StatusMessage = $"Reading \"{Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))}\"…";
 
         try
         {
@@ -1732,6 +1762,8 @@ public class MainViewModel : ViewModelBase
         SelectedStructureNode = null;
         _hasChartBeenOpenedForCurrentPlan = false;
         _lastImportIgnoredCount = 0;
+        ClearDiff();
+        SearchQuery = string.Empty;
         StatusMessage = "Plan cleared. Add folders manually or import from an existing folder.";
         OnPropertyChanged(nameof(TotalFolderCount));
         RaiseStructureChanged();

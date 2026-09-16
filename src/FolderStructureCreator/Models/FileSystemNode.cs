@@ -21,7 +21,7 @@ public class FileSystemNode : INotifyPropertyChanged
     public FileSystemNode(string fullPath, string? displayName = null, bool isPlaceholder = false)
     {
         FullPath = fullPath;
-        Name = displayName ?? Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar));
+        Name = displayName ?? Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (string.IsNullOrEmpty(Name)) Name = fullPath;
         IsPlaceholder = isPlaceholder;
         Children = new ObservableCollection<FileSystemNode>();

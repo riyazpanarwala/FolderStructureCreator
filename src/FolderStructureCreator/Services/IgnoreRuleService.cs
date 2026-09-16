@@ -84,14 +84,13 @@ public class IgnoreRuleService
         var trimmed = rawPattern.Trim();
         if (trimmed.StartsWith('#')) return; // Comment line
 
-        // Normalize trailing/leading slashes
-        trimmed = trimmed.TrimStart('/', '\\');
-        trimmed = trimmed.TrimEnd('/', '\\');
+        // Normalize trailing/leading slashes and convert backslashes to forward slashes
+        trimmed = trimmed.Replace('\\', '/').Trim('/');
 
         if (string.IsNullOrWhiteSpace(trimmed)) return;
 
-        // Simple exact name match (no glob wildcards)
-        if (!trimmed.Contains('*') && !trimmed.Contains('?') && !trimmed.Contains('/') && !trimmed.Contains('\\'))
+        // Simple exact name or path match (no glob wildcards)
+        if (!trimmed.Contains('*') && !trimmed.Contains('?'))
         {
             _exactNames.Add(trimmed);
             return;

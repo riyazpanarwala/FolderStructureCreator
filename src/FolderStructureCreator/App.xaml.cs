@@ -41,6 +41,11 @@ public partial class App : Application
                 {
                     AttachConsole(ATTACH_PARENT_PROCESS);
                 }
+
+                var stdout = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+                Console.SetOut(stdout);
+                var stderr = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
+                Console.SetError(stderr);
             }
             catch { }
 

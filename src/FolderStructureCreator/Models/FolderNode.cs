@@ -74,7 +74,7 @@ public class FolderNode : INotifyPropertyChanged
         RealPath = newPath;
         foreach (var child in Children)
         {
-            var childName = System.IO.Path.GetFileName(child.RealPath?.TrimEnd(System.IO.Path.DirectorySeparatorChar) ?? child.Name);
+            var childName = System.IO.Path.GetFileName(child.RealPath?.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar) ?? child.Name);
             var childNewPath = System.IO.Path.Combine(newPath, childName);
             child.UpdateRealPaths(childNewPath);
         }

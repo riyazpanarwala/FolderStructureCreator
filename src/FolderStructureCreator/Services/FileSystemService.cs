@@ -3,34 +3,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
 using FolderStructureCreator.Models;
+using Microsoft.VisualBasic.FileIO;
 
 namespace FolderStructureCreator.Services;
 
 public static class FileSystemService
 {
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct SHFILEOPSTRUCT
-    {
-        public IntPtr hwnd;
-        public uint wFunc;
-        [MarshalAs(UnmanagedType.LPTStr)]
-        public string pFrom;
-        [MarshalAs(UnmanagedType.LPTStr)]
-        public string pTo;
-        public ushort fFlags;
-        public bool fAnyOperationsAborted;
-        public IntPtr hNameMappings;
-        [MarshalAs(UnmanagedType.LPTStr)]
-        public string lpszProgressTitle;
-    }
-
-    private const uint FO_DELETE = 0x0003;
-    private const ushort FOF_ALLOWUNDO = 0x0040;
-    private const ushort FOF_NOCONFIRMATION = 0x0010;
-    private const ushort FOF_SILENT = 0x0004;
-
-    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-    private static extern int SHFileOperation(ref SHFILEOPSTRUCT FileOp);
     /// <summary>Enumerates real, mounted drives for the root of the left-hand browser.</summary>
     public static IEnumerable<string> GetDrives()
     {
@@ -47,7 +25,7 @@ public static class FileSystemService
     public const int MaxImportTotalNodes = 8000;
     public const int MaxImportDepth = 60;
 
-    public record DirectoryEntry(string Path, bool IsDirectory);
+    public record DirectoryEntry(string Path, string Name, bool IsDirectory);
 
     public class DirectoryScanResult
     {
@@ -69,9 +47,10 @@ public static class FileSystemService
         var result = new DirectoryScanResult();
         try
         {
-            ScanInto(Directory.EnumerateDirectories(path), isDirectory: true, maxItems, result);
+            var dirInfo = new DirectoryInfo(path);
+            ScanInto(dirInfo.EnumerateDirectories(), isDirectory: true, maxItems, result);
             if (!result.Truncated)
-                ScanInto(Directory.EnumerateFiles(path), isDirectory: false, maxItems, result);
+                ScanInto(dirInfo.EnumerateFiles(), isDirectory: false, maxItems, result);
         }
         catch (UnauthorizedAccessException) { }
         catch (IOException) { }
@@ -80,18 +59,14 @@ public static class FileSystemService
         result.Entries.Sort((a, b) =>
         {
             if (a.IsDirectory != b.IsDirectory) return a.IsDirectory ? -1 : 1; // folders first
-            var nameA = Path.GetFileName(a.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var nameB = Path.GetFileName(b.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (string.IsNullOrEmpty(nameA)) nameA = a.Path;
-            if (string.IsNullOrEmpty(nameB)) nameB = b.Path;
-            int comp = NaturalStringComparer.Instance.Compare(nameA, nameB);
+            int comp = NaturalStringComparer.Instance.Compare(a.Name, b.Name);
             return IsSortAscending ? comp : -comp;
         });
 
         return result;
     }
 
-    private static void ScanInto(IEnumerable<string> source, bool isDirectory, int maxItems, DirectoryScanResult result)
+    private static void ScanInto(IEnumerable<FileSystemInfo> source, bool isDirectory, int maxItems, DirectoryScanResult result)
     {
         foreach (var entry in source)
         {
@@ -103,14 +78,14 @@ public static class FileSystemService
 
             try
             {
-                var attrs = File.GetAttributes(entry);
+                var attrs = entry.Attributes;
                 if (attrs.HasFlag(FileAttributes.System)) continue;
                 if (!isDirectory && attrs.HasFlag(FileAttributes.Hidden)) continue;
             }
             catch (UnauthorizedAccessException) { continue; }
             catch (IOException) { continue; }
 
-            result.Entries.Add(new DirectoryEntry(entry, isDirectory));
+            result.Entries.Add(new DirectoryEntry(entry.FullName, entry.Name, isDirectory));
         }
     }
 
@@ -159,7 +134,8 @@ public static class FileSystemService
         var scan = new DirectoryScanResult();
         try
         {
-            ScanInto(Directory.EnumerateDirectories(path), isDirectory: true, maxItems, scan);
+            var dirInfo = new DirectoryInfo(path);
+            ScanInto(dirInfo.EnumerateDirectories(), isDirectory: true, maxItems, scan);
         }
         catch (UnauthorizedAccessException) { }
         catch (IOException) { }
@@ -167,11 +143,7 @@ public static class FileSystemService
 
         scan.Entries.Sort((a, b) =>
         {
-            var nameA = Path.GetFileName(a.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var nameB = Path.GetFileName(b.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (string.IsNullOrEmpty(nameA)) nameA = a.Path;
-            if (string.IsNullOrEmpty(nameB)) nameB = b.Path;
-            int comp = NaturalStringComparer.Instance.Compare(nameA, nameB);
+            int comp = NaturalStringComparer.Instance.Compare(a.Name, b.Name);
             return IsSortAscending ? comp : -comp;
         });
         return (scan.Entries.Select(e => e.Path).ToList(), scan.Truncated);
@@ -212,7 +184,7 @@ public static class FileSystemService
 
     private static FolderNode BuildRecursive(string sourcePath, FolderNode? parent, int depth, int maxTotalNodes, ImportResult result, IgnoreRuleService? ignoreRules, string rootSourcePath)
     {
-        var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
+        var name = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (string.IsNullOrEmpty(name)) name = sourcePath; // e.g. a drive root like "D:\"
 
         var node = new FolderNode(name, parent, realPath: sourcePath);
@@ -258,7 +230,7 @@ public static class FileSystemService
             if (string.IsNullOrWhiteSpace(oldPath))
                 return (false, oldPath, "Original folder path is empty.");
 
-            var parent = Path.GetDirectoryName(oldPath.TrimEnd(Path.DirectorySeparatorChar));
+            var parent = Path.GetDirectoryName(oldPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (string.IsNullOrEmpty(parent))
                 return (false, oldPath, "Cannot rename a drive root directory.");
 
@@ -325,28 +297,31 @@ public static class FileSystemService
         }
     }
 
-    /// <summary>Sends a folder to the Windows Recycle Bin using shell SHFileOperation.</summary>
+    /// <summary>Sends a folder or file to the Windows Recycle Bin using Microsoft.VisualBasic.FileIO.FileSystem.</summary>
     public static (bool Success, string Error) DeleteFolderToRecycleBin(string path)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            if (string.IsNullOrWhiteSpace(path))
                 return (true, string.Empty);
 
-            var fileop = new SHFILEOPSTRUCT
-            {
-                wFunc = FO_DELETE,
-                pFrom = path + "\0\0",
-                fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT
-            };
-
-            int res = SHFileOperation(ref fileop);
-            if (res == 0)
-                return (true, string.Empty);
-
-            // Fallback to Directory.Delete if shell operation fails
             if (Directory.Exists(path))
-                Directory.Delete(path, true);
+            {
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
+                    path,
+                    UIOption.OnlyErrorDialogs,
+                    RecycleOption.SendToRecycleBin);
+                return (true, string.Empty);
+            }
+
+            if (File.Exists(path))
+            {
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                    path,
+                    UIOption.OnlyErrorDialogs,
+                    RecycleOption.SendToRecycleBin);
+                return (true, string.Empty);
+            }
 
             return (true, string.Empty);
         }
@@ -367,7 +342,7 @@ public static class FileSystemService
             if (string.IsNullOrWhiteSpace(destParentPath) || !Directory.Exists(destParentPath))
                 return (false, sourcePath, "Destination parent folder does not exist on disk.");
 
-            var folderName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
+            var folderName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var targetPath = Path.Combine(destParentPath, folderName);
 
             if (string.Equals(sourcePath, targetPath, StringComparison.OrdinalIgnoreCase))
@@ -376,8 +351,8 @@ public static class FileSystemService
             if (Directory.Exists(targetPath))
                 return (false, sourcePath, $"A folder named \"{folderName}\" already exists at the destination.");
 
-            var normSource = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var normTarget = Path.GetFullPath(targetPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var normSource = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var normTarget = Path.GetFullPath(targetPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (normTarget.StartsWith(normSource, StringComparison.OrdinalIgnoreCase))
                 return (false, sourcePath, "Cannot move a folder into one of its own subfolders.");
 
@@ -430,6 +405,7 @@ public static class FileSystemService
                 Directory.CreateDirectory(fullPath);
                 result.CreatedCount++;
             }
+            node.RealPath = fullPath;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException)
         {
@@ -456,7 +432,10 @@ public static class FileSystemService
 
             if (File.Exists(fullPath))
             {
-                Process.Start("explorer.exe", $"/select,\"{fullPath}\"");
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{fullPath}\"")
+                {
+                    UseShellExecute = true
+                });
                 return (true, fullPath, string.Empty);
             }
 

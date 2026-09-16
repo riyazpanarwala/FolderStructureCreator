@@ -27,15 +27,31 @@ public static class DirectoryDiffService
         int matched = 0;
         int extra = 0;
 
-        foreach (var root in roots)
+        var rootsList = roots.ToList();
+
+        // Check extra directories directly under targetPath
+        try
         {
-            EvaluateNodeRecursive(root, targetPath, ref missing, ref matched);
+            var diskRootDirs = Directory.GetDirectories(targetPath);
+            var rootNames = new HashSet<string>(rootsList.Select(r => FileSystemService.SanitizeFolderName(r.Name)), StringComparer.OrdinalIgnoreCase);
+            foreach (var d in diskRootDirs)
+            {
+                var dName = Path.GetFileName(d.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!rootNames.Contains(dName))
+                    extra++;
+            }
+        }
+        catch { }
+
+        foreach (var root in rootsList)
+        {
+            EvaluateNodeRecursive(root, targetPath, ref missing, ref matched, ref extra);
         }
 
         return new DirectoryDiffResult(missing, matched, extra);
     }
 
-    private static void EvaluateNodeRecursive(FolderNode node, string currentBasePath, ref int missing, ref int matched)
+    private static void EvaluateNodeRecursive(FolderNode node, string currentBasePath, ref int missing, ref int matched, ref int extra)
     {
         var sanitizedName = FileSystemService.SanitizeFolderName(node.Name);
         var itemPath = Path.Combine(currentBasePath, sanitizedName);
@@ -46,6 +62,22 @@ public static class DirectoryDiffService
         {
             node.DiffStatus = NodeDiffStatus.MatchesDisk;
             matched++;
+
+            if (!node.IsFile)
+            {
+                try
+                {
+                    var diskSubDirs = Directory.GetDirectories(itemPath);
+                    var childNames = new HashSet<string>(node.Children.Select(c => FileSystemService.SanitizeFolderName(c.Name)), StringComparer.OrdinalIgnoreCase);
+                    foreach (var d in diskSubDirs)
+                    {
+                        var dName = Path.GetFileName(d.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                        if (!childNames.Contains(dName))
+                            extra++;
+                    }
+                }
+                catch { }
+            }
         }
         else
         {
@@ -55,7 +87,7 @@ public static class DirectoryDiffService
 
         foreach (var child in node.Children)
         {
-            EvaluateNodeRecursive(child, itemPath, ref missing, ref matched);
+            EvaluateNodeRecursive(child, itemPath, ref missing, ref matched, ref extra);
         }
     }
 }
