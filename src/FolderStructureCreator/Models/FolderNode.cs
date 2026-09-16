@@ -87,6 +87,9 @@ public class FolderNode : INotifyPropertyChanged
     /// </summary>
     public bool IsFile { get; }
 
+    /// <summary>True if this node or its descendants hit the scan limit and stopped early.</summary>
+    public bool IsTruncated { get; set; }
+
     public string Name
     {
         get => _name;

@@ -15,9 +15,8 @@ public class MainViewModel : ViewModelBase
     public const double SideBySideOrgChartWidth = 1500;
     /// <summary>Maximum number of folders opened/expanded on initial chart load.</summary>
     public const int InitialMaxOpenedFolders = 100;
-    // A chart creates one WPF control per folder. Keep this high enough to support deep project charts,
-    // while initial expansion is capped at InitialMaxOpenedFolders for crisp responsiveness.
-    private const int MaxOrgChartNodes = 2500;
+    // A chart creates one WPF control per folder. Initial expansion is capped at
+    // InitialMaxOpenedFolders for crisp responsiveness while deeper branches expand on demand.
     // ---- Left pane: live Windows directory browser ----
     public ObservableCollection<FileSystemNode> Drives { get; } = new();
 
@@ -1041,7 +1040,7 @@ public class MainViewModel : ViewModelBase
         try
         {
             var ignoreRules = EnableIgnoreRules ? IgnoreRuleService.CreateForSource(folderPath) : new IgnoreRuleService(includeBuiltInDefaults: false);
-            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, MaxOrgChartNodes, ignoreRules));
+            var importResult = await Task.Run(() => FileSystemService.BuildFolderNodeTree(folderPath, FileSystemService.MaxImportTotalNodes, ignoreRules));
 
             void ApplyResult()
             {
@@ -1058,9 +1057,10 @@ public class MainViewModel : ViewModelBase
                 string limitNote = importResult.FolderCount > InitialMaxOpenedFolders
                     ? $" (first {InitialMaxOpenedFolders} folders opened; use 'Expand all' or click any badge to view more)"
                     : "";
-                StatusMessage = importResult.Truncated
-                    ? $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}{limitNote}. Live computer sync enabled."
-                    : $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount} folder(s){ignoreText}{limitNote} in the org chart. Live computer sync enabled.";
+                string truncatedWarning = importResult.Truncated
+                    ? $" (capped at safety limit of ~{FileSystemService.MaxImportTotalNodes:N0} folders)"
+                    : "";
+                StatusMessage = $"Showing \"{importResult.Root.Name}\" — {importResult.FolderCount:N0} folder(s){truncatedWarning}{ignoreText}{limitNote}. Live computer sync enabled.";
 
                 OnPropertyChanged(nameof(TotalFolderCount));
                 RaiseStructureChanged();
@@ -2013,8 +2013,7 @@ public class MainViewModel : ViewModelBase
         AllCommands.Add(new CommandItem("Open Selected Folder in Explorer", "Destination", "↗", OpenSelectedFolderInExplorerCommand));
 
         // Blueprint Architecture & Health Analysis
-        AllCommands.Add(new CommandItem("Blueprint Architecture Metrics & Health", "Analysis", "📊", OpenMetricsDashboardCommand, "Ctrl+M"));
-        AllCommands.Add(new CommandItem("Path Safety & MAX_PATH Audit", "Analysis", "🛡", OpenMetricsDashboardCommand, "Ctrl+M"));
+        AllCommands.Add(new CommandItem("Blueprint Architecture Metrics", "Analysis", "📊", OpenMetricsDashboardCommand, "Ctrl+M"));
 
         ApplyCommandPaletteFilter();
     }

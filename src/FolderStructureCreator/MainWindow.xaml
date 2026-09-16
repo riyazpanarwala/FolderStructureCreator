@@ -1332,7 +1332,7 @@
                                 <Path Data="{StaticResource ChartGeometry}" Style="{StaticResource NavIcon}" Width="15" Height="15" Margin="0,0,8,0"/>
                                 <TextBlock Text="Blueprint Architecture Metrics &amp; Health" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}"/>
                             </StackPanel>
-                            <TextBlock Text="Pre-creation structural analytics, depth distribution, and Windows filesystem safety audit."
+                            <TextBlock Text="Pre-creation structural analytics, depth distribution, and hierarchy architecture."
                                        FontSize="11.5" Foreground="{DynamicResource BrushTextSecondary}" Margin="23,2,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -1351,13 +1351,20 @@
                     <!-- Scrollable Content -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="0,0,4,0">
-                            <!-- 4 KPI Summary Cards -->
-                            <UniformGrid Columns="4" Margin="0,0,0,14">
+                            <!-- 3 KPI Summary Cards -->
+                            <UniformGrid Columns="3" Margin="0,0,0,14">
                                 <!-- Card 1: Total Folders -->
                                 <Border Background="{DynamicResource BrushCardBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,4,0">
                                     <StackPanel>
-                                        <TextBlock Text="TOTAL FOLDERS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                        <TextBlock Text="{Binding CurrentMetrics.TotalFolders}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}" Margin="0,4,0,0"/>
+                                        <Grid>
+                                            <TextBlock Text="TOTAL FOLDERS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushTextSecondary}"/>
+                                            <Border HorizontalAlignment="Right" Background="{DynamicResource BrushWarningSoft}" CornerRadius="4" Padding="4,1"
+                                                    Visibility="{Binding CurrentMetrics.IsTruncated, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Directory scan reached safety limit. Deeper folders were omitted to prevent memory exhaustion.">
+                                                <TextBlock Text="CAPPED" FontSize="8.5" FontWeight="Bold" Foreground="{DynamicResource BrushWarning}"/>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Text="{Binding CurrentMetrics.TotalFoldersDisplay}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}" Margin="0,4,0,0"/>
                                         <TextBlock Text="Planned nodes" FontSize="10.5" Foreground="{DynamicResource BrushPlaceholder}" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Border>
@@ -1375,28 +1382,11 @@
                                 </Border>
 
                                 <!-- Card 3: Avg Branching -->
-                                <Border Background="{DynamicResource BrushCardBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="4,0,4,0">
+                                <Border Background="{DynamicResource BrushCardBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="4,0,0,0">
                                     <StackPanel>
                                         <TextBlock Text="AVG BRANCHING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushTextSecondary}"/>
                                         <TextBlock Text="{Binding CurrentMetrics.AvgBranching}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource BrushFolderIcon}" Margin="0,4,0,0"/>
                                         <TextBlock Text="Subfolders/parent" FontSize="10.5" Foreground="{DynamicResource BrushPlaceholder}" Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Card 4: Max Path Length -->
-                                <Border Background="{DynamicResource BrushCardBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="4,0,0,0">
-                                    <StackPanel>
-                                        <Grid>
-                                            <TextBlock Text="MAX PATH" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource BrushTextSecondary}"/>
-                                            <Border HorizontalAlignment="Right" Background="{DynamicResource BrushBadgeBg}" CornerRadius="4" Padding="4,1">
-                                                <TextBlock Text="{Binding CurrentMetrics.PathLengthStatus}" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource BrushBadgeFg}"/>
-                                            </Border>
-                                        </Grid>
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0" VerticalAlignment="Bottom">
-                                            <TextBlock Text="{Binding CurrentMetrics.MaxPathLength}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                            <TextBlock Text=" / 260" FontSize="12" Foreground="{DynamicResource BrushTextSecondary}" Margin="3,0,0,2"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Character limit" FontSize="10.5" Foreground="{DynamicResource BrushPlaceholder}" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </UniformGrid>
@@ -1471,92 +1461,11 @@
                             </Grid>
 
                             <!-- Deepest Path Chain Bar -->
-                            <Border Background="{DynamicResource BrushBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,14">
+                            <Border Background="{DynamicResource BrushBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,0">
                                 <DockPanel>
                                     <TextBlock Text="Deepest Path:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding CurrentMetrics.DeepestFolderPath}" FontSize="11" Foreground="{DynamicResource BrushTextPrimary}" FontFamily="Consolas, Cascadia Code, Segoe UI Mono" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DockPanel>
-                            </Border>
-
-                            <!-- Bottom Section: Windows Path Safety & Hygiene -->
-                            <Border Background="{DynamicResource BrushCardBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,8">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="Windows Path Safety &amp; Hygiene" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                            <TextBlock Text=" (MAX_PATH, Reserved Names, Case Collisions)" FontSize="11" Foreground="{DynamicResource BrushTextSecondary}" Margin="4,0,0,0"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <!-- Clean State Banner -->
-                                    <Border CornerRadius="6" Padding="10,8" Margin="0,2">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="{DynamicResource BrushAccentSoft}"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
-                                                <Setter Property="BorderThickness" Value="1"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding CurrentMetrics.HasIssues}" Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource CheckGeometry}" Style="{StaticResource NavIcon}" Stroke="{DynamicResource BrushAccent}" Width="12" Height="12" Margin="0,0,8,0"/>
-                                            <TextBlock Text="All checks passed! No reserved names, case collisions, illegal characters, or MAX_PATH violations detected." FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- Issues List -->
-                                    <ItemsControl ItemsSource="{Binding CurrentMetrics.SafetyIssues}">
-                                        <ItemsControl.Style>
-                                            <Style TargetType="ItemsControl">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding CurrentMetrics.HasIssues}" Value="False">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ItemsControl.Style>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{DynamicResource BrushBg}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="5" Padding="8,6" Margin="0,3">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <Border CornerRadius="4" Padding="5,1" Margin="0,0,8,0" VerticalAlignment="Top">
-                                                            <Border.Style>
-                                                                <Style TargetType="Border">
-                                                                    <Setter Property="Background" Value="{DynamicResource BrushWarningSoft}"/>
-                                                                    <Setter Property="BorderBrush" Value="{DynamicResource BrushWarning}"/>
-                                                                    <Setter Property="BorderThickness" Value="1"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Severity}" Value="Error">
-                                                                            <Setter Property="Background" Value="{DynamicResource BrushDangerSoft}"/>
-                                                                            <Setter Property="BorderBrush" Value="{DynamicResource BrushDanger}"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </Border.Style>
-                                                            <TextBlock Text="{Binding SeverityBadge}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}"/>
-                                                        </Border>
-                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{Binding IssueType}" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource BrushTextPrimary}" Margin="0,0,6,0"/>
-                                                                <TextBlock Text="{Binding Path}" FontSize="10.5" Foreground="{DynamicResource BrushPlaceholder}" FontFamily="Consolas, Cascadia Code"/>
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding Message}" FontSize="11" Foreground="{DynamicResource BrushTextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>

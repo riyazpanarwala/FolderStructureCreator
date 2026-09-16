@@ -9,15 +9,6 @@ namespace FolderStructureCreator.Services;
 
 public static class BlueprintMetricsService
 {
-    private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-    };
-
-    private static readonly char[] InvalidPathChars = Path.GetInvalidFileNameChars();
-
     public static BlueprintMetrics CalculateMetrics(IEnumerable<FolderNode> rootFolders, string? targetDestination = null)
     {
         var metrics = new BlueprintMetrics();
@@ -27,6 +18,9 @@ public static class BlueprintMetricsService
         {
             return metrics;
         }
+
+        metrics.IsTruncated = rootsList.Any(r => r.IsTruncated);
+        metrics.TruncatedLimit = FileSystemService.MaxImportTotalNodes;
 
         var allFolders = new List<FolderNode>();
         var levelCounts = new Dictionary<int, int>();
@@ -49,34 +43,15 @@ public static class BlueprintMetricsService
             }
 
             fullPaths[node] = currentPath;
-            if (currentPath.Length > metrics.MaxPathLength)
-            {
-                metrics.MaxPathLength = currentPath.Length;
-                metrics.LongestPath = currentPath;
-            }
 
             int descendantCount = 0;
             var nonFileChildren = node.Children.Where(c => !c.IsFile).ToList();
 
-            // Check sibling case collisions
-            var groupedByCase = nonFileChildren.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase);
-            foreach (var group in groupedByCase)
-            {
-                if (group.Count() > 1)
-                {
-                    metrics.SafetyIssues.Add(new PathSafetyIssue
-                    {
-                        Severity = SafetySeverity.Error,
-                        IssueType = "Case Collision",
-                        Path = currentPath,
-                        Message = $"Duplicate sibling folders differ only by casing: '{string.Join("', '", group.Select(x => x.Name))}'. Windows filesystem cannot distinguish them."
-                    });
-                }
-            }
-
             foreach (var child in nonFileChildren)
             {
-                string childPath = Path.Combine(currentPath, child.Name);
+                string childPath = !string.IsNullOrWhiteSpace(child.RealPath)
+                    ? child.RealPath
+                    : Path.Combine(currentPath, child.Name);
                 Traverse(child, level + 1, childPath);
                 descendantCount += 1 + subtreeCounts.GetValueOrDefault(child, 0);
             }
@@ -84,25 +59,26 @@ public static class BlueprintMetricsService
             subtreeCounts[node] = descendantCount;
         }
 
-        // Check root-level collisions
-        var rootGrouped = rootsList.GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase);
-        foreach (var group in rootGrouped)
-        {
-            if (group.Count() > 1)
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Error,
-                    IssueType = "Case Collision",
-                    Path = basePath,
-                    Message = $"Duplicate root folders differ only by casing: '{string.Join("', '", group.Select(x => x.Name))}'."
-                });
-            }
-        }
-
         foreach (var root in rootsList)
         {
-            string rootPath = Path.Combine(basePath, root.Name);
+            string rootPath;
+            if (!string.IsNullOrWhiteSpace(root.RealPath))
+            {
+                rootPath = root.RealPath;
+            }
+            else
+            {
+                var baseFolder = Path.GetFileName(basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!string.IsNullOrEmpty(baseFolder) && string.Equals(baseFolder, root.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    rootPath = basePath;
+                }
+                else
+                {
+                    rootPath = Path.Combine(basePath, root.Name);
+                }
+            }
+
             Traverse(root, 1, rootPath);
         }
 
@@ -158,72 +134,6 @@ public static class BlueprintMetricsService
             })
             .ToList();
         metrics.HeaviestSubtrees = topSubtrees;
-
-        // Path Safety & Hygiene Checks
-        foreach (var folder in allFolders)
-        {
-            string name = folder.Name;
-            string fullPath = fullPaths.GetValueOrDefault(folder, name);
-
-            // 1. Reserved Win32 Device Names
-            string baseNameWithoutExt = Path.GetFileNameWithoutExtension(name);
-            if (ReservedNames.Contains(name) || ReservedNames.Contains(baseNameWithoutExt))
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Error,
-                    IssueType = "Reserved Name",
-                    Path = fullPath,
-                    Message = $"'{name}' is a reserved Windows system device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9) and cannot be created on disk."
-                });
-            }
-
-            // 2. Invalid Characters
-            if (name.IndexOfAny(InvalidPathChars) >= 0)
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Error,
-                    IssueType = "Illegal Characters",
-                    Path = fullPath,
-                    Message = $"'{name}' contains illegal Windows filename characters (< > : \" / \\ | ? *)."
-                });
-            }
-
-            // 3. Trailing space or period
-            if (name.EndsWith(' ') || name.EndsWith('.'))
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Warning,
-                    IssueType = "Trailing Character",
-                    Path = fullPath,
-                    Message = $"'{name}' ends with a space or dot. Windows Explorer will trim or lock this directory."
-                });
-            }
-
-            // 4. MAX_PATH check
-            if (fullPath.Length >= 260)
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Error,
-                    IssueType = "Path Length Limit (MAX_PATH)",
-                    Path = fullPath,
-                    Message = $"Full path reaches {fullPath.Length} characters, which exceeds the Windows 260-character MAX_PATH limit."
-                });
-            }
-            else if (fullPath.Length >= 220)
-            {
-                metrics.SafetyIssues.Add(new PathSafetyIssue
-                {
-                    Severity = SafetySeverity.Warning,
-                    IssueType = "Path Length Warning",
-                    Path = fullPath,
-                    Message = $"Full path is {fullPath.Length} characters (near 260 MAX_PATH threshold)."
-                });
-            }
-        }
 
         // Detect Naming Convention
         metrics.NamingConvention = DetectNamingConvention(allFolders.Select(f => f.Name));

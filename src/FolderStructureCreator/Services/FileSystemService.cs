@@ -21,8 +21,8 @@ public static class FileSystemService
 
     /// <summary>Safety caps for reading real folders into memory, so a huge or deeply-nested
     /// reference folder can never freeze the UI - the scan always stops at a hard ceiling.</summary>
-    public const int MaxItemsPerLevel = 500;   // folders + files combined, per directory
-    public const int MaxImportTotalNodes = 8000;
+    public const int MaxItemsPerLevel = 5000;   // folders + files combined, per directory
+    public const int MaxImportTotalNodes = 50000;
     public const int MaxImportDepth = 60;
 
     public record DirectoryEntry(string Path, string Name, bool IsDirectory);
@@ -179,6 +179,10 @@ public static class FileSystemService
         }
 
         result.Root = BuildRecursive(sourcePath, null, depth: 0, maxTotalNodes, result, ignoreRules, sourcePath);
+        if (result.Truncated && result.Root != null)
+        {
+            result.Root.IsTruncated = true;
+        }
         return result;
     }
 
