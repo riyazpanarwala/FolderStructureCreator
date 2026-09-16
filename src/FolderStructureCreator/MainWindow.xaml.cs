@@ -359,7 +359,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                OrgChartHost.Render(ViewModel.RootFolders, ViewModel.SelectedStructureNode);
+                OrgChartHost.Render(ViewModel.RootFolders, ViewModel.SelectedStructureNode, immediate: true);
                 string ext = Path.GetExtension(dialog.FileName).ToLowerInvariant();
                 switch (ext)
                 {

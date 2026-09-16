@@ -203,7 +203,8 @@ public partial class OrgChartView : UserControl
 
     private List<FolderNode> _lastRoots = new();
     private FolderNode? _lastSelected;
-    private Dictionary<FrameworkElement, FolderNode> _boxMap = new();
+    private readonly Dictionary<FrameworkElement, FolderNode> _boxMap = new();
+    private readonly Dictionary<FolderNode, FrameworkElement> _nodeToBoxMap = new();
     private FolderNode? _draggedNode;
     private Point _dragStartPoint;
     private bool _isDragging;
@@ -319,12 +320,19 @@ public partial class OrgChartView : UserControl
     }
 
     /// <summary>Redraws the whole chart for the given roots, highlighting the selected node if any.</summary>
-    public void Render(IEnumerable<FolderNode> roots, FolderNode? selected)
+    public void Render(IEnumerable<FolderNode> roots, FolderNode? selected, bool immediate = false)
     {
         _lastRoots = roots.ToList();
         _lastSelected = selected;
-        _isRenderScheduled = false;
-        RenderInternal();
+        if (immediate)
+        {
+            _isRenderScheduled = false;
+            RenderInternal();
+        }
+        else
+        {
+            RequestRender();
+        }
     }
 
     private sealed record NodeVisualMeta(
@@ -346,8 +354,8 @@ public partial class OrgChartView : UserControl
     {
         if (ReferenceEquals(_lastSelected, node)) return;
 
-        // If chart is empty or not rendered yet, trigger full render
-        if (_boxMap.Count == 0 || _lastRoots.Count == 0)
+        // If chart is empty or not rendered yet, trigger render
+        if (_nodeToBoxMap.Count == 0 || _lastRoots.Count == 0)
         {
             _lastSelected = node;
             RequestRender();
@@ -355,7 +363,7 @@ public partial class OrgChartView : UserControl
         }
 
         // If node is non-null and not found in current visual map (e.g. collapsed ancestor), full render to reveal it
-        if (node != null && !_boxMap.Values.Any(n => ReferenceEquals(n, node)))
+        if (node != null && !_nodeToBoxMap.ContainsKey(node))
         {
             _lastSelected = node;
             RequestRender();
@@ -363,25 +371,17 @@ public partial class OrgChartView : UserControl
         }
 
         // Unselect previous
-        if (_lastSelected != null)
+        if (_lastSelected != null && _nodeToBoxMap.TryGetValue(_lastSelected, out var prevBox))
         {
-            var prevEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
-            if (prevEntry.Key != null)
-            {
-                ApplySelectionVisuals(prevEntry.Key, _lastSelected, false);
-            }
+            ApplySelectionVisuals(prevBox, _lastSelected, false);
         }
 
         _lastSelected = node;
 
         // Select new
-        if (_lastSelected != null)
+        if (_lastSelected != null && _nodeToBoxMap.TryGetValue(_lastSelected, out var newBox))
         {
-            var newEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
-            if (newEntry.Key != null)
-            {
-                ApplySelectionVisuals(newEntry.Key, _lastSelected, true);
-            }
+            ApplySelectionVisuals(newBox, _lastSelected, true);
         }
     }
 
@@ -463,12 +463,11 @@ public partial class OrgChartView : UserControl
 
         void PerformScroll()
         {
-            var selectedEntry = _boxMap.FirstOrDefault(kvp => ReferenceEquals(kvp.Value, _lastSelected));
-            if (selectedEntry.Key == null) return;
+            if (!_nodeToBoxMap.TryGetValue(_lastSelected, out var selectedElement)) return;
 
             double scale = ChartScale.ScaleX;
             Rect bounds;
-            if (selectedEntry.Key is Border box)
+            if (selectedElement is Border box)
             {
                 double left = Canvas.GetLeft(box);
                 double top = Canvas.GetTop(box);
@@ -476,7 +475,7 @@ public partial class OrgChartView : UserControl
                 double boxHeightScaled = (box.Height > 0 ? box.Height : BoxHeight);
                 bounds = new Rect(left, top, boxWidthScaled, boxHeightScaled);
             }
-            else if (selectedEntry.Key is System.Windows.Shapes.Path path && path.Data != null)
+            else if (selectedElement is System.Windows.Shapes.Path path && path.Data != null)
             {
                 bounds = path.Data.Bounds;
             }
@@ -814,25 +813,6 @@ public partial class OrgChartView : UserControl
             runningX += cw + ColumnGap;
         }
 
-        Dictionary<int, (double MinY, double MaxY)> GetDepthProfileY(List<NodeLayoutInfo> nodes)
-        {
-            var profile = new Dictionary<int, (double MinY, double MaxY)>();
-            foreach (var n in nodes)
-            {
-                double top = n.Y;
-                double bottom = n.Y + n.Height;
-                if (!profile.TryGetValue(n.Depth, out var span))
-                {
-                    profile[n.Depth] = (top, bottom);
-                }
-                else
-                {
-                    profile[n.Depth] = (Math.Min(span.MinY, top), Math.Max(span.MaxY, bottom));
-                }
-            }
-            return profile;
-        }
-
         double ComputeShiftY(Dictionary<int, (double MinY, double MaxY)> prevProfile, Dictionary<int, (double MinY, double MaxY)> currProfile)
         {
             double maxShift = 0;
@@ -861,7 +841,17 @@ public partial class OrgChartView : UserControl
             }
         }
 
-        List<NodeLayoutInfo> LayoutSubtreeH(FolderNode node, int depth)
+        void ShiftProfileY(Dictionary<int, (double MinY, double MaxY)> profile, double deltaY)
+        {
+            if (Math.Abs(deltaY) < 0.0001) return;
+            foreach (var key in profile.Keys.ToList())
+            {
+                var (min, max) = profile[key];
+                profile[key] = (min + deltaY, max + deltaY);
+            }
+        }
+
+        (List<NodeLayoutInfo> Nodes, Dictionary<int, (double MinY, double MaxY)> Profile) LayoutSubtreeH(FolderNode node, int depth)
         {
             var (w, h) = GetNodeDimensions(node, depth, isVertical: false);
             var nodeInfo = new NodeLayoutInfo
@@ -883,7 +873,11 @@ public partial class OrgChartView : UserControl
 
             if (visibleChildren.Count == 0)
             {
-                return allSubtreeNodes;
+                var leafProfile = new Dictionary<int, (double MinY, double MaxY)>
+                {
+                    [depth] = (nodeInfo.Y, nodeInfo.Y + h)
+                };
+                return (allSubtreeNodes, leafProfile);
             }
 
             var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
@@ -891,8 +885,7 @@ public partial class OrgChartView : UserControl
 
             foreach (var child in visibleChildren)
             {
-                var childSubtreeNodes = LayoutSubtreeH(child, depth + 1);
-                var childProfile = GetDepthProfileY(childSubtreeNodes);
+                var (childSubtreeNodes, childProfile) = LayoutSubtreeH(child, depth + 1);
 
                 if (cumulativeChildrenNodes.Count > 0)
                 {
@@ -900,7 +893,7 @@ public partial class OrgChartView : UserControl
                     if (shift > 0)
                     {
                         ShiftNodesY(childSubtreeNodes, shift);
-                        childProfile = GetDepthProfileY(childSubtreeNodes);
+                        ShiftProfileY(childProfile, shift);
                     }
                 }
 
@@ -926,7 +919,8 @@ public partial class OrgChartView : UserControl
             nodeInfo.Y = desiredCenter - h / 2.0;
 
             allSubtreeNodes.AddRange(cumulativeChildrenNodes);
-            return allSubtreeNodes;
+            cumulativeProfile[depth] = (nodeInfo.Y, nodeInfo.Y + h);
+            return (allSubtreeNodes, cumulativeProfile);
         }
 
         var cumulativeRootNodes = new List<NodeLayoutInfo>();
@@ -934,8 +928,7 @@ public partial class OrgChartView : UserControl
 
         foreach (var root in branchRoots)
         {
-            var rootSubtreeNodes = LayoutSubtreeH(root, baseDepth);
-            var rootProfile = GetDepthProfileY(rootSubtreeNodes);
+            var (rootSubtreeNodes, rootProfile) = LayoutSubtreeH(root, baseDepth);
 
             if (cumulativeRootNodes.Count > 0)
             {
@@ -943,7 +936,7 @@ public partial class OrgChartView : UserControl
                 if (shift > 0)
                 {
                     ShiftNodesY(rootSubtreeNodes, shift);
-                    rootProfile = GetDepthProfileY(rootSubtreeNodes);
+                    ShiftProfileY(rootProfile, shift);
                 }
             }
 
@@ -1021,25 +1014,6 @@ public partial class OrgChartView : UserControl
             runningY += ch + LevelVerticalGap;
         }
 
-        Dictionary<int, (double MinX, double MaxX)> GetDepthProfileX(List<NodeLayoutInfo> nodes)
-        {
-            var profile = new Dictionary<int, (double MinX, double MaxX)>();
-            foreach (var n in nodes)
-            {
-                double left = n.X;
-                double right = n.X + n.Width;
-                if (!profile.TryGetValue(n.Depth, out var span))
-                {
-                    profile[n.Depth] = (left, right);
-                }
-                else
-                {
-                    profile[n.Depth] = (Math.Min(span.MinX, left), Math.Max(span.MaxX, right));
-                }
-            }
-            return profile;
-        }
-
         double ComputeShiftX(Dictionary<int, (double MinX, double MaxX)> prevProfile, Dictionary<int, (double MinX, double MaxX)> currProfile)
         {
             double maxShift = 0;
@@ -1068,7 +1042,17 @@ public partial class OrgChartView : UserControl
             }
         }
 
-        List<NodeLayoutInfo> LayoutSubtreeV(FolderNode node, int depth)
+        void ShiftProfileX(Dictionary<int, (double MinX, double MaxX)> profile, double deltaX)
+        {
+            if (Math.Abs(deltaX) < 0.0001) return;
+            foreach (var key in profile.Keys.ToList())
+            {
+                var (min, max) = profile[key];
+                profile[key] = (min + deltaX, max + deltaX);
+            }
+        }
+
+        (List<NodeLayoutInfo> Nodes, Dictionary<int, (double MinX, double MaxX)> Profile) LayoutSubtreeV(FolderNode node, int depth)
         {
             var (w, h) = GetNodeDimensions(node, depth, isVertical: true);
             var nodeInfo = new NodeLayoutInfo
@@ -1090,7 +1074,11 @@ public partial class OrgChartView : UserControl
 
             if (visibleChildren.Count == 0)
             {
-                return allSubtreeNodes;
+                var leafProfile = new Dictionary<int, (double MinX, double MaxX)>
+                {
+                    [depth] = (nodeInfo.X, nodeInfo.X + w)
+                };
+                return (allSubtreeNodes, leafProfile);
             }
 
             var cumulativeChildrenNodes = new List<NodeLayoutInfo>();
@@ -1098,8 +1086,7 @@ public partial class OrgChartView : UserControl
 
             foreach (var child in visibleChildren)
             {
-                var childSubtreeNodes = LayoutSubtreeV(child, depth + 1);
-                var childProfile = GetDepthProfileX(childSubtreeNodes);
+                var (childSubtreeNodes, childProfile) = LayoutSubtreeV(child, depth + 1);
 
                 if (cumulativeChildrenNodes.Count > 0)
                 {
@@ -1107,7 +1094,7 @@ public partial class OrgChartView : UserControl
                     if (shift > 0)
                     {
                         ShiftNodesX(childSubtreeNodes, shift);
-                        childProfile = GetDepthProfileX(childSubtreeNodes);
+                        ShiftProfileX(childProfile, shift);
                     }
                 }
 
@@ -1133,7 +1120,8 @@ public partial class OrgChartView : UserControl
             nodeInfo.X = desiredCenter - w / 2.0;
 
             allSubtreeNodes.AddRange(cumulativeChildrenNodes);
-            return allSubtreeNodes;
+            cumulativeProfile[depth] = (nodeInfo.X, nodeInfo.X + w);
+            return (allSubtreeNodes, cumulativeProfile);
         }
 
         var cumulativeRootNodes = new List<NodeLayoutInfo>();
@@ -1141,8 +1129,7 @@ public partial class OrgChartView : UserControl
 
         foreach (var root in roots)
         {
-            var rootSubtreeNodes = LayoutSubtreeV(root, 0);
-            var rootProfile = GetDepthProfileX(rootSubtreeNodes);
+            var (rootSubtreeNodes, rootProfile) = LayoutSubtreeV(root, 0);
 
             if (cumulativeRootNodes.Count > 0)
             {
@@ -1150,7 +1137,7 @@ public partial class OrgChartView : UserControl
                 if (shift > 0)
                 {
                     ShiftNodesX(rootSubtreeNodes, shift);
-                    rootProfile = GetDepthProfileX(rootSubtreeNodes);
+                    ShiftProfileX(rootProfile, shift);
                 }
             }
 
@@ -1720,6 +1707,7 @@ public partial class OrgChartView : UserControl
             AttachNodeInteractions(path, node);
             RootCanvas.Children.Add(path);
             _boxMap[path] = node;
+            _nodeToBoxMap[node] = path;
 
             double span = endAngle - startAngle;
             double midAngle = (startAngle + endAngle) / 2.0;
@@ -1825,6 +1813,7 @@ public partial class OrgChartView : UserControl
 
         RootCanvas.Children.Clear();
         _boxMap.Clear();
+        _nodeToBoxMap.Clear();
 
         if (_lastRoots.Count == 0)
         {
@@ -2187,6 +2176,7 @@ public partial class OrgChartView : UserControl
             Canvas.SetTop(box, info.Y);
 
             _boxMap[box] = node;
+            _nodeToBoxMap[node] = box;
 
             box.PreviewMouseLeftButtonDown += (s, e) =>
             {

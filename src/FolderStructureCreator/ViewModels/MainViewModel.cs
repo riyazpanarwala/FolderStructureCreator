@@ -261,14 +261,15 @@ public class MainViewModel : ViewModelBase
         set
         {
             bool turningOn = value && !_isOrgChartView;
+            if (turningOn && !_hasChartBeenOpenedForCurrentPlan)
+            {
+                _hasChartBeenOpenedForCurrentPlan = true;
+                LimitInitialExpansion(RootFolders, InitialMaxOpenedFolders);
+            }
+
             if (SetField(ref _isOrgChartView, value))
             {
                 OnPropertyChanged(nameof(ShouldShowDestinationSidebarToggle));
-                if (turningOn && !_hasChartBeenOpenedForCurrentPlan)
-                {
-                    _hasChartBeenOpenedForCurrentPlan = true;
-                    LimitInitialExpansion(RootFolders, InitialMaxOpenedFolders);
-                }
             }
         }
     }
